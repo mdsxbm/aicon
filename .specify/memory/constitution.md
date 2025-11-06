@@ -1,50 +1,81 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+同步影响报告:
+版本变更: 1.0.0 (初始宪法)
+修改原则: 无 (初始创建)
+新增章节: 全部章节
+删除章节: 无
+模板更新状态: ✅ 已检查所有依赖模板
+待办事项: 无
+-->
 
-## Core Principles
+# AICG内容分发平台宪法
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+## 核心原则
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### 一、用户价值优先
+每个功能必须服务于内容创作者将文本高效转换为视频的需求。专注于消除技术障碍，保持创作控制权。长文本处理的用户体验优化是不可妥协的。
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### 二、渐进式处理
+长篇内容分阶段处理：上传 → 章节切割 → 详细解析 → 内容确认 → 批量生成。防止系统过载，为用户提供增量控制。
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### 三、异步优先架构
+所有AI密集型操作（文本解析、图像生成、音频合成、视频合成）必须异步处理，提供实时进度跟踪。用户可排队多个章节并继续工作。
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### 四、分层系统设计
+系统分层：展示层（UI）、应用层（业务逻辑）、集成层（AI服务）、基础设施层（存储/队列）。每层独立扩展和测试。
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### 五、全面可观测性
+所有操作发出带关联ID的结构化日志。跟踪性能指标、处理进度、错误率、用户行为模式。实现运营卓越和产品优化。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## 质量标准
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### 性能指标
+- 百万字文档章节切割：30秒内
+- 图像生成：30-60秒/张（依赖第三方API）
+- 视频合成：1-2分钟/分钟视频
+- 系统可用性：99.9%
+- 核心页面加载：3秒内
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### 可靠性保障
+- 文本解析支持故障点恢复
+- 视频生成从失败步骤继续（非重启）
+- 用户进度自动保存，会话中断后恢复
+- 生成资源完整性验证
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+### 安全合规
+- API密钥AES-256静态加密
+- 文件传输HTTPS加密
+- 操作审计日志（用户可追溯）
+- API速率限制和配额控制
+- 防护：XSS、CSRF、SQL注入
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+## 开发规范
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+### 代码质量
+- 功能必须可独立测试
+- 外部AI服务集成必须有合同测试
+- 端到端用户工作流必须有集成测试
+- 必须通过静态分析和安全扫描
+- 所有代码变更必须经过审查
+
+### 用户体验
+- 渐进式信息披露：概览优先，详情按需
+- 所有列表界面支持批量操作
+- 长时间操作提供实时进度反馈
+- 关键编辑操作支持撤销/重做
+- 网络中断优雅降级
+
+### 扩展性设计
+- 微服务架构，支持水平扩展
+- 分布式任务队列，优先级管理
+- 存储系统弹性扩容
+- CDN内容分发集成
+- 写入密集型工作负载优化数据库
+
+## 治理机制
+
+本宪法凌驾于所有开发实践。所有拉取请求和设计审查必须验证合规性。修正需要文档、团队批准、迁移计划。违反原则必须有业务影响分析。
+
+复杂性必须有用户价值、技术必要性或合规性证明。使用项目架构指导文档进行开发决策和问题升级。
+
+**版本**: 1.0.0 | **制定日期**: 2025-11-06 | **最后修订**: 2025-11-06
