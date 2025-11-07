@@ -171,7 +171,7 @@ backend/
 
 frontend/
 ├── package.json
-├── vite.config.ts
+├── vite.config.js
 ├── src/
 │   ├── components/      # Vue.js components
 │   │   ├── common/       # Reusable components

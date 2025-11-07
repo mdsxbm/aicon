@@ -17,16 +17,17 @@
 ### 索引策略
 - 主键自动索引
 - 外键索引（无约束）
-- 查询频繁字段索引
-- 复合索引优化常用查询
+- 查询频繁字段单列索引
+- 避免过度复合索引，保持简单高效
 
 ### 数据类型
 - 主键：String (UUID)
 - 文本内容：Text
 - 状态：Enum
-- 时间：DateTime
+- 时间：DateTime (ISO8601格式，API中返回为字符串)
 - 数量：Integer
 - 金额：Decimal(10, 2)
+- 时间轴：Float (秒，精确到毫秒)
 
 ## 核心数据模型
 
@@ -132,8 +133,9 @@ class Project(Base):
 
     # 索引定义
     __table_args__ = (
-        Index('idx_project_owner_status', 'owner_id', 'status'),
-        Index('idx_project_created_status', 'created_at', 'status'),
+        Index('idx_project_owner', 'owner_id'),
+        Index('idx_project_status', 'status'),
+        Index('idx_project_created', 'created_at'),
         Index('idx_project_file_hash', 'file_hash'),
     )
 ```
@@ -197,9 +199,9 @@ class Chapter(Base):
 
     # 索引定义
     __table_args__ = (
-        Index('idx_chapter_project_status', 'project_id', 'status'),
-        Index('idx_chapter_project_number', 'project_id', 'chapter_number'),
+        Index('idx_chapter_project', 'project_id'),
         Index('idx_chapter_status', 'status'),
+        Index('idx_chapter_number', 'chapter_number'),
     )
 ```
 
@@ -253,7 +255,8 @@ class Paragraph(Base):
 
     # 索引定义
     __table_args__ = (
-        Index('idx_paragraph_chapter_order', 'chapter_id', 'order_index'),
+        Index('idx_paragraph_chapter', 'chapter_id'),
+        Index('idx_paragraph_order', 'order_index'),
         Index('idx_paragraph_action', 'action'),
         Index('idx_paragraph_confirmed', 'is_confirmed'),
     )
@@ -327,10 +330,11 @@ class Sentence(Base):
 
     # 索引定义
     __table_args__ = (
-        Index('idx_sentence_paragraph_order', 'paragraph_id', 'order_index'),
+        Index('idx_sentence_paragraph', 'paragraph_id'),
+        Index('idx_sentence_order', 'order_index'),
         Index('idx_sentence_status', 'status'),
-        Index('idx_sentence_timing', 'start_time', 'end_time'),
-        Index('idx_sentence_paragraph_status', 'paragraph_id', 'status'),
+        Index('idx_sentence_start_time', 'start_time'),
+        Index('idx_sentence_end_time', 'end_time'),
     )
 ```
 
@@ -425,10 +429,11 @@ class GenerationTask(Base):
 
     # 索引定义
     __table_args__ = (
-        Index('idx_task_project_status', 'project_id', 'status'),
-        Index('idx_task_chapter_status', 'chapter_id', 'status'),
-        Index('idx_task_status_priority', 'status', 'priority', 'created_at'),
-        Index('idx_task_created_status', 'created_at', 'status'),
+        Index('idx_task_project', 'project_id'),
+        Index('idx_task_chapter', 'chapter_id'),
+        Index('idx_task_status', 'status'),
+        Index('idx_task_priority', 'priority'),
+        Index('idx_task_created', 'created_at'),
     )
 ```
 
@@ -745,6 +750,25 @@ class SystemLog(Base):
         Index('idx_log_request_id', 'request_id'),
     )
 ```
+
+## 时间字段处理规范
+
+### 时间格式统一
+- **数据库存储**: PostgreSQL DateTime 类型
+- **API响应**: ISO8601 字符串格式 (YYYY-MM-DDTHH:MM:SS.sssZ)
+- **前端处理**: JavaScript Date 对象或字符串
+- **时区**: 统一使用 UTC，前端根据用户时区转换
+
+### 时间字段分类
+- **创建时间**: `created_at` - 记录创建时间
+- **更新时间**: `updated_at` - 记录最后修改时间
+- **业务时间**: `started_at`, `completed_at`, `published_at` - 业务流程时间点
+- **时间轴**: `start_time`, `end_time` - 音视频时间轴（Float类型，秒）
+
+### 时间轴特殊处理
+- 音频时间轴使用 Float 类型存储秒数（精确到毫秒）
+- ASR识别的时间戳用于字幕同步
+- 视频合成时转换为时间码格式
 
 ## 数据库初始化
 

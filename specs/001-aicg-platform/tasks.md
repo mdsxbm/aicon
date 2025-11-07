@@ -3,7 +3,7 @@
 **Feature**: AICG内容分发平台
 **Created**: 2025-11-06
 **Status**: Ready for Implementation
-**Total Tasks**: 96
+**Total Tasks**: 215
 **Development Approach**: 渐进式模块开发，每个模块前后端并行完成
 
 ## Phase 1: 项目基础设施与认证模块
@@ -43,7 +43,7 @@
 
 #### 前端基础设施
 - [ ] T017 [P] 设置前端Vue.js项目结构 in frontend/
-- [ ] T018 [P] 配置Vite构建工具和开发服务器 in frontend/vite.config.ts
+- [ ] T018 [P] 配置Vite构建工具和开发服务器 in frontend/vite.config.js
 - [ ] T019 [P] 配置Vue Router路由系统 in frontend/src/router/index.js
 - [ ] T020 [P] 配置Pinia状态管理 in frontend/src/stores/index.js
 - [ ] T021 [P] 配置Axios HTTP客户端 in frontend/src/services/api.js
@@ -95,54 +95,54 @@
 ### Implementation Tasks
 
 #### 数据模型扩展
-- [ ] T036 [P] 实现Project项目模型 in backend/src/models/project.py
-- [ ] T037 [P] 扩展Project模型支持文件处理状态 in backend/src/models/project.py
-- [ ] T038 生成项目表数据库迁移文件 in backend/migrations/versions/
+- [ ] T043 [P] 实现Project项目模型 in backend/src/models/project.py
+- [ ] T044 [P] 扩展Project模型支持文件处理状态 in backend/src/models/project.py
+- [ ] T045 生成项目表数据库迁移文件 in backend/migrations/versions/
 
 #### 后端服务与API
-- [ ] T039 [P] 实现文件处理工具 in backend/src/utils/file_handlers.py
-- [ ] T040 [P] 配置MinIO对象存储客户端 in backend/src/utils/storage.py
-- [ ] T041 [P] 实现项目管理服务 in backend/src/services/project_service.py
-- [ ] T042 [P] 实现文件上传API in backend/src/api/v1/upload.py
-- [ ] T043 [P] 实现项目管理API in backend/src/api/v1/projects.py
-- [ ] T044 [P] 实现文件删除和清理API in backend/src/api/v1/files.py
+- [ ] T046 [P] 实现文件处理工具 in backend/src/utils/file_handlers.py
+- [ ] T047 [P] 配置MinIO对象存储客户端 in backend/src/utils/storage.py
+- [ ] T048 [P] 实现项目管理服务 in backend/src/services/project_service.py
+- [ ] T049 [P] 实现文件上传API in backend/src/api/v1/upload.py
+- [ ] T050 [P] 实现项目管理API in backend/src/api/v1/projects.py
+- [ ] T051 [P] 实现文件删除和清理API in backend/src/api/v1/files.py
 
 #### 前端组件与页面
-- [ ] T045 [P] 创建文件上传组件 in frontend/src/components/common/FileUpload.vue
-- [ ] T046 [P] 创建项目列表组件 in frontend/src/components/project/ProjectList.vue
-- [ ] T047 [P] 创建项目卡片组件 in frontend/src/components/project/ProjectCard.vue
-- [ ] T048 [P] 创建项目创建表单 in frontend/src/components/project/ProjectForm.vue
-- [ ] T049 [P] 创建项目详情页面 in frontend/src/views/ProjectDetail.vue
-- [ ] T050 [P] 创建项目管理页面 in frontend/src/views/Projects.vue
+- [ ] T052 [P] 创建文件上传组件 in frontend/src/components/common/FileUpload.vue
+- [ ] T053 [P] 创建项目列表组件 in frontend/src/components/project/ProjectList.vue
+- [ ] T054 [P] 创建项目卡片组件 in frontend/src/components/project/ProjectCard.vue
+- [ ] T055 [P] 创建项目创建表单 in frontend/src/components/project/ProjectForm.vue
+- [ ] T056 [P] 创建项目详情页面 in frontend/src/views/ProjectDetail.vue
+- [ ] T057 [P] 创建项目管理页面 in frontend/src/views/Projects.vue
 
 #### 前端服务与状态管理
-- [ ] T051 [P] 实现文件上传API服务 in frontend/src/services/upload.js
-- [ ] T052 [P] 实现项目管理API服务 in frontend/src/services/projects.js
-- [ ] T053 [P] 创建项目状态管理 in frontend/src/stores/projects.js
-- [ ] T054 [P] 实现上传进度管理 in frontend/src/composables/useUpload.js
+- [ ] T058 [P] 实现文件上传API服务 in frontend/src/services/upload.js
+- [ ] T059 [P] 实现项目管理API服务 in frontend/src/services/projects.js
+- [ ] T060 [P] 创建项目状态管理 in frontend/src/stores/projects.js
+- [ ] T061 [P] 实现上传进度管理 in frontend/src/composables/useUpload.js
 
 #### 背景任务
-- [ ] T055 [P] 实现文件处理Celery任务 in backend/src/workers/file_processing.py
-- [ ] T056 [P] 实现文件类型检测和验证 in backend/src/utils/validators.py
+- [ ] T062 [P] 实现文件处理Celery任务 in backend/src/workers/file_processing.py
+- [ ] T063 [P] 实现文件类型检测和验证 in backend/src/utils/validators.py
 
 #### Playwright MCP E2E测试
-- [ ] T057 [P] 创建文件上传流程E2E测试 in tests/e2e/upload.spec.js
-- [ ] T058 [P] 实现多格式文档上传测试 in tests/e2e/upload.spec.js
-- [ ] T059 [P] 创建项目管理CRUD操作测试 in tests/e2e/projects.spec.js
-- [ ] T060 [P] 实现文件上传进度条显示测试 in tests/e2e/upload.spec.js
-- [ ] T061 [P] 创建大文件上传稳定性测试 in tests/e2e/upload-large.spec.js
-- [ ] T062 [P] 实现项目列表分页和搜索测试 in tests/e2e/projects.spec.js
+- [ ] T064 [P] 创建文件上传流程E2E测试 in tests/e2e/upload.spec.js
+- [ ] T065 [P] 实现多格式文档上传测试 in tests/e2e/upload.spec.js
+- [ ] T066 [P] 创建项目管理CRUD操作测试 in tests/e2e/projects.spec.js
+- [ ] T067 [P] 实现文件上传进度条显示测试 in tests/e2e/upload.spec.js
+- [ ] T068 [P] 创建大文件上传稳定性测试 in tests/e2e/upload-large.spec.js
+- [ ] T069 [P] 实现项目列表分页和搜索测试 in tests/e2e/projects.spec.js
 
 #### 单元与集成测试
-- [ ] T063 编写文件上传API测试 in backend/tests/integration/test_upload.py
-- [ ] T064 编写项目管理API测试 in backend/tests/integration/test_projects.py
-- [ ] T065 编写前端文件组件测试 in frontend/tests/components/Project.test.js
+- [ ] T070 编写文件上传API测试 in backend/tests/integration/test_upload.py
+- [ ] T071 编写项目管理API测试 in backend/tests/integration/test_projects.py
+- [ ] T072 编写前端文件组件测试 in frontend/tests/components/Project.test.js
 
 #### 模块验收测试
-- [ ] T066 执行Playwright MCP文件上传和项目管理完整测试
-- [ ] T067 验证各种文档格式的上传和处理流程
-- [ ] T068 测试项目CRUD操作的完整业务流程
-- [ ] T069 生成模块测试报告和性能指标
+- [ ] T073 执行Playwright MCP文件上传和项目管理完整测试
+- [ ] T074 验证各种文档格式的上传和处理流程
+- [ ] T075 测试项目CRUD操作的完整业务流程
+- [ ] T076 生成模块测试报告和性能指标
 
 ## Phase 3: 章节识别与解析模块
 
@@ -150,7 +150,7 @@
 实现智能章节识别、内容解析和章节编辑功能，支持用户编辑和确认章节结构。
 
 ### Independent Test Criteria
-- [ ] 百万字文档章节切割在30秒内完成，识别准确率95%+
+- [ ] 百万字文档章节切割在30秒内完成（基于标准开发环境），识别准确率90%+
 - [ ] 支持多种章节标记格式（章、节、回等）
 - [ ] 用户可以编辑章节标题和内容
 - [ ] 段落级别的编辑操作（删除、修改、忽略）
@@ -160,71 +160,71 @@
 ### Implementation Tasks
 
 #### 数据模型扩展
-- [ ] T061 [P] 实现Chapter章节模型 in backend/src/models/chapter.py
-- [ ] T062 [P] 实现Paragraph段落模型 in backend/src/models/paragraph.py
-- [ ] T063 [P] 实现Sentence句子模型 in backend/src/models/sentence.py
-- [ ] T064 [P] 扩展Chapter模型支持编辑功能 in backend/src/models/chapter.py
-- [ ] T065 [P] 扩展Paragraph模型支持编辑操作 in backend/src/models/paragraph.py
-- [ ] T066 生成章节相关数据库迁移文件 in backend/migrations/versions/
+- [ ] T077 [P] 实现Chapter章节模型 in backend/src/models/chapter.py
+- [ ] T078 [P] 实现Paragraph段落模型 in backend/src/models/paragraph.py
+- [ ] T079 [P] 实现Sentence句子模型 in backend/src/models/sentence.py
+- [ ] T080 [P] 扩展Chapter模型支持编辑功能 in backend/src/models/chapter.py
+- [ ] T081 [P] 扩展Paragraph模型支持编辑操作 in backend/src/models/paragraph.py
+- [ ] T082 生成章节相关数据库迁移文件 in backend/migrations/versions/
 
 #### 后端服务与算法
-- [ ] T067 [P] 实现文本解析服务 in backend/src/services/text_parser.py
-- [ ] T068 [P] 实现章节识别算法 in backend/src/services/text_parser.py
-- [ ] T069 [P] 实现章节管理服务 in backend/src/services/chapter_service.py
-- [ ] T070 [P] 实现段落处理服务 in backend/src/services/paragraph_service.py
-- [ ] T071 [P] 实现句子分割算法 in backend/src/utils/text_utils.py
+- [ ] T083 [P] 实现文本解析服务 in backend/src/services/text_parser.py
+- [ ] T084 [P] 实现章节识别算法 in backend/src/services/text_parser.py
+- [ ] T085 [P] 实现章节管理服务 in backend/src/services/chapter_service.py
+- [ ] T086 [P] 实现段落处理服务 in backend/src/services/paragraph_service.py
+- [ ] T087 [P] 实现句子分割算法 in backend/src/utils/text_utils.py
 
 #### 后端API
-- [ ] T072 [P] 实现章节管理API in backend/src/api/v1/chapters.py
-- [ ] T073 [P] 实现段落管理API in backend/src/api/v1/paragraphs.py
-- [ ] T074 [P] 实现句子管理API in backend/src/api/v1/sentences.py
-- [ ] T075 [P] 实现文档解析状态API in backend/src/api/v1/projects.py
-- [ ] T076 [P] 实现章节批量操作API in backend/src/api/v1/chapters.py
+- [ ] T088 [P] 实现章节管理API in backend/src/api/v1/chapters.py
+- [ ] T089 [P] 实现段落管理API in backend/src/api/v1/paragraphs.py
+- [ ] T090 [P] 实现句子管理API in backend/src/api/v1/sentences.py
+- [ ] T091 [P] 实现文档解析状态API in backend/src/api/v1/projects.py
+- [ ] T092 [P] 实现章节批量操作API in backend/src/api/v1/chapters.py
 
 #### 背景任务
-- [ ] T077 [P] 实现文档解析Celery任务 in backend/src/workers/text_processing.py
-- [ ] T078 [P] 实现章节识别Celery任务 in backend/src/workers/text_processing.py
-- [ ] T079 [P] 实现章节解析Celery任务 in backend/src/workers/text_processing.py
+- [ ] T093 [P] 实现文档解析Celery任务 in backend/src/workers/text_processing.py
+- [ ] T094 [P] 实现章节识别Celery任务 in backend/src/workers/text_processing.py
+- [ ] T095 [P] 实现章节解析Celery任务 in backend/src/workers/text_processing.py
 
 #### 前端组件与页面
-- [ ] T080 [P] 创建章节列表组件 in frontend/src/components/chapter/ChapterList.vue
-- [ ] T081 [P] 创建章节编辑器组件 in frontend/src/components/chapter/ChapterEditor.vue
-- [ ] T082 [P] 创建章节卡片组件 in frontend/src/components/chapter/ChapterCard.vue
-- [ ] T083 [P] 创建段落编辑器组件 in frontend/src/components/paragraph/ParagraphEditor.vue
-- [ ] T084 [P] 创建章节状态选择器 in frontend/src/components/chapter/ChapterStatus.vue
-- [ ] T085 [P] 创建文本解析进度组件 in frontend/src/components/chapter/ParsingProgress.vue
+- [ ] T096 [P] 创建章节列表组件 in frontend/src/components/chapter/ChapterList.vue
+- [ ] T097 [P] 创建章节编辑器组件 in frontend/src/components/chapter/ChapterEditor.vue
+- [ ] T098 [P] 创建章节卡片组件 in frontend/src/components/chapter/ChapterCard.vue
+- [ ] T099 [P] 创建段落编辑器组件 in frontend/src/components/paragraph/ParagraphEditor.vue
+- [ ] T100 [P] 创建章节状态选择器 in frontend/src/components/chapter/ChapterStatus.vue
+- [ ] T101 [P] 创建文本解析进度组件 in frontend/src/components/chapter/ParsingProgress.vue
 
 #### 前端页面与路由
-- [ ] T086 [P] 更新项目详情页面包含章节管理 in frontend/src/views/ProjectDetail.vue
-- [ ] T087 [P] 创建章节编辑页面 in frontend/src/views/ChapterEditor.vue
-- [ ] T088 [P] 创建章节预览页面 in frontend/src/views/ChapterPreview.vue
+- [ ] T102 [P] 更新项目详情页面包含章节管理 in frontend/src/views/ProjectDetail.vue
+- [ ] T103 [P] 创建章节编辑页面 in frontend/src/views/ChapterEditor.vue
+- [ ] T104 [P] 创建章节预览页面 in frontend/src/views/ChapterPreview.vue
 
 #### 前端服务与状态管理
-- [ ] T089 [P] 实现章节API服务 in frontend/src/services/chapters.js
-- [ ] T090 [P] 实现段落API服务 in frontend/src/services/paragraphs.js
-- [ ] T091 [P] 创建章节状态管理 in frontend/src/stores/chapters.js
-- [ ] T092 [P] 创建段落状态管理 in frontend/src/stores/paragraphs.js
-- [ ] T093 [P] 实现章节编辑逻辑 in frontend/src/composables/useChapterEditor.js
+- [ ] T105 [P] 实现章节API服务 in frontend/src/services/chapters.js
+- [ ] T106 [P] 实现段落API服务 in frontend/src/services/paragraphs.js
+- [ ] T107 [P] 创建章节状态管理 in frontend/src/stores/chapters.js
+- [ ] T108 [P] 创建段落状态管理 in frontend/src/stores/paragraphs.js
+- [ ] T109 [P] 实现章节编辑逻辑 in frontend/src/composables/useChapterEditor.js
 
 #### Playwright MCP E2E测试
-- [ ] T094 [P] 创建章节解析流程E2E测试 in tests/e2e/chapters.spec.js
-- [ ] T095 [P] 实现章节编辑器交互测试 in tests/e2e/chapters.spec.js
-- [ ] T096 [P] 创建段落编辑操作测试 in tests/e2e/paragraphs.spec.js
-- [ ] T097 [P] 实现章节状态管理测试 in tests/e2e/chapters.spec.js
-- [ ] T098 [P] 创建大文档解析性能测试 in tests/e2e/large-document.spec.js
-- [ ] T099 [P] 实现章节确认流程测试 in tests/e2e/chapters.spec.js
-- [ ] T100 [P] 创建章节列表导航和搜索测试 in tests/e2e/chapters.spec.js
+- [ ] T110 [P] 创建章节解析流程E2E测试 in tests/e2e/chapters.spec.js
+- [ ] T111 [P] 实现章节编辑器交互测试 in tests/e2e/chapters.spec.js
+- [ ] T112 [P] 创建段落编辑操作测试 in tests/e2e/paragraphs.spec.js
+- [ ] T113 [P] 实现章节状态管理测试 in tests/e2e/chapters.spec.js
+- [ ] T114 [P] 创建大文档解析性能测试 in tests/e2e/large-document.spec.js
+- [ ] T115 [P] 实现章节确认流程测试 in tests/e2e/chapters.spec.js
+- [ ] T116 [P] 创建章节列表导航和搜索测试 in tests/e2e/chapters.spec.js
 
 #### 单元与集成测试
-- [ ] T101 编写章节识别算法测试 in backend/tests/unit/test_text_parser.py
-- [ ] T102 编写章节API集成测试 in backend/tests/integration/test_chapters.py
-- [ ] T103 编写前端章节组件测试 in frontend/tests/components/Chapter.test.js
+- [ ] T117 编写章节识别算法测试 in backend/tests/unit/test_text_parser.py
+- [ ] T118 编写章节API集成测试 in backend/tests/integration/test_chapters.py
+- [ ] T119 编写前端章节组件测试 in frontend/tests/components/Chapter.test.js
 
 #### 模块验收测试
-- [ ] T104 执行Playwright MCP章节解析完整测试套件
-- [ ] T105 验证章节识别准确率和性能指标
-- [ ] T106 测试章节编辑和确认的完整用户流程
-- [ ] T107 验证大文档处理的稳定性和性能
+- [ ] T120 执行Playwright MCP章节解析完整测试套件
+- [ ] T121 验证章节识别准确率和性能指标
+- [ ] T122 测试章节编辑和确认的完整用户流程
+- [ ] T123 验证大文档处理的稳定性和性能
 
 ## Phase 4: AI服务配置模块
 
@@ -242,48 +242,48 @@
 ### Implementation Tasks
 
 #### 数据模型
-- [ ] T098 [P] 实现APIConfig API配置模型 in backend/src/models/api_config.py
-- [ ] T099 生成API配置表数据库迁移文件 in backend/migrations/versions/
+- [ ] T124 [P] 实现APIConfig API配置模型 in backend/src/models/api_config.py
+- [ ] T125 生成API配置表数据库迁移文件 in backend/migrations/versions/
 
 #### 后端服务
-- [ ] T100 [P] 实现API管理服务 in backend/src/services/api_manager.py
-- [ ] T101 [P] 实现API密钥加密工具 in backend/src/utils/security.py
-- [ ] T102 [P] 实现用量统计服务 in backend/src/services/usage_service.py
+- [ ] T126 [P] 实现API管理服务 in backend/src/services/api_manager.py
+- [ ] T127 [P] 实现API密钥加密工具 in backend/src/utils/security.py
+- [ ] T128 [P] 实现用量统计服务 in backend/src/services/usage_service.py
 
 #### 后端API
-- [ ] T103 [P] 实现API配置管理API in backend/src/api/v1/api_configs.py
-- [ ] T104 [P] 实现API验证API in backend/src/api/v1/api_configs.py
-- [ ] T105 [P] 实现用量统计API in backend/src/api/v1/api_configs.py
-- [ ] T106 [P] 实现API配置汇总API in backend/src/api/v1/api_configs.py
+- [ ] T129 [P] 实现API配置管理API in backend/src/api/v1/api_configs.py
+- [ ] T130 [P] 实现API验证API in backend/src/api/v1/api_configs.py
+- [ ] T131 [P] 实现用量统计API in backend/src/api/v1/api_configs.py
+- [ ] T132 [P] 实现API配置汇总API in backend/src/api/v1/api_configs.py
 
 #### 前端组件与页面
-- [ ] T107 [P] 创建API配置列表组件 in frontend/src/components/settings/APIConfigList.vue
-- [ ] T108 [P] 创建API配置表单 in frontend/src/components/settings/APIConfigForm.vue
-- [ ] T109 [P] 创建用量统计组件 in frontend/src/components/settings/UsageStats.vue
-- [ ] T110 [P] 创建API验证组件 in frontend/src/components/settings/APIValidator.vue
+- [ ] T133 [P] 创建API配置列表组件 in frontend/src/components/settings/APIConfigList.vue
+- [ ] T134 [P] 创建API配置表单 in frontend/src/components/settings/APIConfigForm.vue
+- [ ] T135 [P] 创建用量统计组件 in frontend/src/components/settings/UsageStats.vue
+- [ ] T136 [P] 创建API验证组件 in frontend/src/components/settings/APIValidator.vue
 
 #### 前端页面
-- [ ] T111 [P] 创建设置页面包含API配置 in frontend/src/views/Settings.vue
-- [ ] T112 [P] 创建用量统计页面 in frontend/src/views/UsageStats.vue
+- [ ] T137 [P] 创建设置页面包含API配置 in frontend/src/views/Settings.vue
+- [ ] T138 [P] 创建用量统计页面 in frontend/src/views/UsageStats.vue
 
 #### 前端服务与状态管理
-- [ ] T113 [P] 实现API配置服务 in frontend/src/services/api-configs.js
-- [ ] T114 [P] 创建API配置状态管理 in frontend/src/stores/api-configs.js
+- [ ] T139 [P] 实现API配置服务 in frontend/src/services/api-configs.js
+- [ ] T140 [P] 创建API配置状态管理 in frontend/src/stores/api-configs.js
 
 #### Playwright MCP E2E测试
-- [ ] T115 [P] 创建API配置管理E2E测试 in tests/e2e/api-configs.spec.js
-- [ ] T116 [P] 实现API密钥添加和验证测试 in tests/e2e/api-configs.spec.js
-- [ ] T117 [P] 创建用量统计页面测试 in tests/e2e/usage-stats.spec.js
-- [ ] T118 [P] 实现API密钥切换和禁用测试 in tests/e2e/api-configs.spec.js
+- [ ] T141 [P] 创建API配置管理E2E测试 in tests/e2e/api-configs.spec.js
+- [ ] T142 [P] 实现API密钥添加和验证测试 in tests/e2e/api-configs.spec.js
+- [ ] T143 [P] 创建用量统计页面测试 in tests/e2e/usage-stats.spec.js
+- [ ] T144 [P] 实现API密钥切换和禁用测试 in tests/e2e/api-configs.spec.js
 
 #### 单元与集成测试
-- [ ] T119 编写API配置API测试 in backend/tests/integration/test_api_configs.py
-- [ ] T120 编写API配置组件测试 in frontend/tests/components/Settings.test.js
+- [ ] T145 编写API配置API测试 in backend/tests/integration/test_api_configs.py
+- [ ] T146 编写API配置组件测试 in frontend/tests/components/Settings.test.js
 
 #### 模块验收测试
-- [ ] T121 执行Playwright MCP AI服务配置完整测试
-- [ ] T122 验证API密钥安全和加密存储
-- [ ] T123 测试用量统计和费用预估功能
+- [ ] T147 执行Playwright MCP AI服务配置完整测试
+- [ ] T148 验证API密钥安全和加密存储
+- [ ] T149 测试用量统计和费用预估功能
 
 ## Phase 5: 视频生成模块
 
@@ -371,17 +371,22 @@
 - [ ] T168 [P] 创建时间轴编辑测试 in tests/e2e/timeline.spec.js
 - [ ] T169 [P] 实现视频下载和预览测试 in tests/e2e/videos.spec.js
 - [ ] T170 [P] 创建并发生成稳定性测试 in tests/e2e/generation-concurrent.spec.js
+- [ ] T171 [P] 实现WebSocket连接和消息推送测试 in tests/e2e/websocket.spec.js
+- [ ] T172 [P] 创建WebSocket断线重连测试 in tests/e2e/websocket.spec.js
+- [ ] T173 [P] 实现实时进度同步测试 in tests/e2e/websocket.spec.js
 
 #### 单元与集成测试
-- [ ] T171 编写视频生成服务测试 in backend/tests/unit/test_video_generator.py
-- [ ] T172 编写生成任务API测试 in backend/tests/integration/test_generation.py
-- [ ] T173 编写前端生成组件测试 in frontend/tests/components/Generation.test.js
+- [ ] T174 编写视频生成服务测试 in backend/tests/unit/test_video_generator.py
+- [ ] T175 编写生成任务API测试 in backend/tests/integration/test_generation.py
+- [ ] T176 编写前端生成组件测试 in frontend/tests/components/Generation.test.js
+- [ ] T177 编写WebSocket通信测试 in backend/tests/integration/test_websocket.py
 
 #### 模块验收测试
-- [ ] T174 执行Playwright MCP视频生成完整测试套件
-- [ ] T175 验证并发生成处理能力和性能指标
-- [ ] T176 测试任务控制和错误恢复机制
-- [ ] T177 验证生成视频质量和功能完整性
+- [ ] T178 执行Playwright MCP视频生成完整测试套件
+- [ ] T179 验证并发生成处理能力和性能指标
+- [ ] T180 测试任务控制和错误恢复机制
+- [ ] T181 验证生成视频质量和功能完整性
+- [ ] T182 验证WebSocket实时通信功能
 
 ## Phase 6: 内容分发模块
 
@@ -653,7 +658,7 @@ tests/e2e/
 - 用量统计显示测试
 - API密钥切换测试
 
-#### Phase 5: 视频生成模块 (9个E2E测试)
+#### Phase 5: 视频生成模块 (12个E2E测试)
 - 视频生成流程测试
 - 批量章节生成测试
 - 任务控制测试
@@ -663,6 +668,9 @@ tests/e2e/
 - 时间轴编辑测试
 - 视频下载测试
 - 并发生成稳定性测试
+- WebSocket连接和消息推送测试
+- WebSocket断线重连测试
+- 实时进度同步测试
 
 #### Phase 6: 内容分发模块 (5个E2E测试)
 - 平台账号绑定测试
@@ -699,15 +707,15 @@ tests/e2e/
 ---
 
 **Task Summary**:
-- **Total Tasks**: 215 (包含43个Playwright MCP E2E测试任务)
+- **Total Tasks**: 218 (包含46个Playwright MCP E2E测试任务)
 - **Phase 1**: 42个任务 (基础设施 + 认证 + E2E测试)
 - **Phase 2**: 31个任务 (文档上传 + 项目管理 + E2E测试)
 - **Phase 3**: 44个任务 (章节识别与解析 + E2E测试)
 - **Phase 4**: 23个任务 (AI服务配置 + E2E测试)
-- **Phase 5**: 56个任务 (视频生成 + E2E测试)
+- **Phase 5**: 59个任务 (视频生成 + E2E测试)
 - **Phase 6**: 24个任务 (内容分发 + E2E测试)
 - **Phase 7**: 35个任务 (系统优化 + E2E测试)
 
-**测试覆盖**: 43个E2E测试用例，覆盖所有核心用户流程
+**测试覆盖**: 46个E2E测试用例，覆盖所有核心用户流程（包含WebSocket实时通信）
 **Estimated Timeline**: 10-11周 (2人团队，包含测试时间)
 **Key Milestones**: 每2-3周完成一个模块并通过E2E测试验收

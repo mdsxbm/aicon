@@ -104,6 +104,10 @@ MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_SECURE=false
 
+# MinIO端口说明
+# API端口: 9000 (服务间调用)
+# Web控制台: 9001 (浏览器访问)
+
 # JWT配置
 JWT_SECRET_KEY=your-super-secret-jwt-key-here
 JWT_ALGORITHM=HS256
@@ -151,6 +155,7 @@ docker compose exec backend uv run python scripts/create_admin.py
 - **后端API**: http://localhost:8000
 - **API文档**: http://localhost:8000/docs
 - **MinIO控制台**: http://localhost:9001 (admin/admin123)
+- **MinIO服务端口**: 9000 (API), 9001 (Web控制台)
 - **Redis Inspector**: http://localhost:8001/redis
 - **Grafana监控**: http://localhost:3002 (admin/admin123)
 
@@ -508,6 +513,81 @@ docker compose exec backend uv run celery -A src.workers.base inspect active
 
 # 清空队列
 docker compose exec backend uv run celery -A src.workers.base purge
+```
+
+## 测试策略
+
+### 测试数据管理
+
+#### E2E测试数据准备
+```bash
+# 创建测试数据目录
+mkdir -p tests/e2e/fixtures/{test-documents,test-images,test-videos}
+
+# 测试文档示例
+tests/e2e/fixtures/test-documents/
+├── short-story.txt           # 短篇故事 (1千字)
+├── novel-sample.txt           # 小说样本 (1万字)
+├── multi-chapter.md          # 多章节文档
+└── complex-format.docx       # 复杂格式文档
+
+# 测试API密钥 (开发环境)
+tests/e2e/fixtures/test-api-keys.json
+{
+  "test_image_key": "test_image_key_value",
+  "test_audio_key": "test_audio_key_value"
+}
+```
+
+#### 测试环境配置
+```javascript
+// tests/e2e/utils/test-setup.js
+export const testConfig = {
+  baseURL: 'http://localhost:8000',
+  frontendURL: 'http://localhost:3000',
+  defaultTimeout: 30000,
+  retries: 2
+};
+
+export const testUsers = {
+  valid: {
+    username: 'testuser',
+    email: 'test@example.com',
+    password: 'testpassword123'
+  }
+};
+```
+
+### 数据库迁移最佳实践
+
+#### 开发环境迁移
+```bash
+# 检查迁移状态
+uv run alembic current
+
+# 创建新迁移
+uv run alembic revision --autogenerate -m "描述变更内容"
+
+# 执行迁移
+uv run alembic upgrade head
+
+# 回滚迁移（如需要）
+uv run alembic downgrade -1
+```
+
+#### 生产环境迁移
+```bash
+# 备份数据库
+docker compose exec postgres pg_dump -U aicg_user aicg_db > backup-$(date +%Y%m%d).sql
+
+# 测试迁移文件
+uv run alembic upgrade head --sql
+
+# 执行迁移
+uv run alembic upgrade head
+
+# 验证迁移结果
+docker compose exec backend uv run python scripts/verify-migration.py
 ```
 
 ## 开发指南
