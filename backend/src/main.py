@@ -11,7 +11,12 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.health import router as health_router
-from src.api.middleware import (error_handler_middleware, logging_middleware, rate_limit_middleware, security_middleware)
+from src.middleware import (
+    error_handler_middleware,
+    logging_middleware,
+    security_middleware,
+    performance_monitoring_middleware,
+)
 from src.api.v1 import api_router
 from src.api.websocket import router as websocket_router
 from src.core.config import settings
@@ -57,10 +62,11 @@ if settings.ENVIRONMENT == "production":
     )
 
 # 添加自定义中间件 (顺序重要)
-app.middleware("http")(security_middleware)
-app.middleware("http")(rate_limit_middleware)
-app.middleware("http")(logging_middleware)
-app.middleware("http")(error_handler_middleware)
+# 注意：中间件的执行顺序是注册的逆序
+app.middleware("http")(error_handler_middleware)          # 最外层，处理所有异常
+app.middleware("http")(performance_monitoring_middleware) # 性能监控
+app.middleware("http")(logging_middleware)                # 日志记录
+app.middleware("http")(security_middleware)               # 安全检查
 
 
 # 添加请求处理时间中间件
@@ -169,7 +175,7 @@ def main():
     uvicorn.run(
         "src.main:app",
         host="0.0.0.0",
-        port=8001,
+        port=8000,
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower(),
         access_log=True,
