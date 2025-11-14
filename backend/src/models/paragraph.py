@@ -4,13 +4,12 @@
 """
 
 import uuid
-from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, List, Dict
+from typing import Dict, List, TYPE_CHECKING
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Column, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy import select
+from sqlalchemy.orm import relationship
 
 from .base import BaseModel
 
@@ -145,7 +144,7 @@ class Paragraph(BaseModel):
         """
         result = await db_session.execute(
             select(cls).where(cls.chapter_id == chapter_id)
-                        .order_by(cls.order_index)
+            .order_by(cls.order_index)
         )
         return result.scalars().all()
 
@@ -190,6 +189,40 @@ class Paragraph(BaseModel):
             .order_by(cls.chapter_id, cls.order_index)
         )
         return result.scalars().all()
+
+    @classmethod
+    async def delete_by_project_id(cls, db_session, project_id: str) -> int:
+        """
+        删除项目的所有段落
+
+        Args:
+            db_session: 数据库会话
+            project_id: 项目ID
+
+        Returns:
+            删除的段落数量
+        """
+        # 通过子查询删除项目的所有段落
+        from src.models.chapter import Chapter
+
+        # 先统计数量
+        result = await db_session.execute(
+            select(func.count(cls.id)).where(cls.chapter_id.in_(
+                select(Chapter.id).where(Chapter.project_id == project_id)
+            ))
+        )
+        count = result.scalar()
+
+        if count > 0:
+            # 执行删除（会级联删除句子数据）
+            await db_session.execute(
+                cls.__table__.delete().where(cls.chapter_id.in_(
+                    select(Chapter.id).where(Chapter.project_id == project_id)
+                ))
+            )
+            await db_session.flush()
+
+        return count
 
 
 __all__ = [

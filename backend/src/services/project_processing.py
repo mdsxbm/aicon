@@ -45,27 +45,30 @@ class ProjectProcessingService:
             # 1. 获取项目信息
             project = await self._get_project(db_session, project_id)
 
-            # 2. 更新项目状态为处理中
+            # 2. 清理已有的数据（避免重复）
+            # await self._clean_existing_data(db_session, project_id)
+
+            # 3. 更新项目状态为处理中
             await self._update_project_status(db_session, project, ProjectStatus.PARSING, 10)
 
-            # 3. 解析文本内容
+            # 4. 解析文本内容
             logger.info(f"开始解析项目 {project_id} 的文本内容，长度: {len(file_content)} 字符")
             chapters_data, paragraphs_data, sentences_data = await self._parse_text_content(
                 project_id, file_content
             )
 
-            # 4. 更新进度到30%（解析完成）
+            # 5. 更新进度到30%（解析完成）
             await self._update_project_status(db_session, project, ProjectStatus.PARSING, 30)
 
-            # 5. 批量保存到数据库
+            # 6. 批量保存到数据库
             await self._save_parsed_content(
                 db_session, project_id, chapters_data, paragraphs_data, sentences_data
             )
 
-            # 6. 更新项目统计信息
+            # 7. 更新项目统计信息
             await self._update_project_statistics(db_session, project)
 
-            # 7. 标记项目为已解析
+            # 8. 标记项目为已解析
             await self._update_project_status(db_session, project, ProjectStatus.PARSED, 100)
 
             logger.info(f"项目 {project_id} 文件处理完成")
@@ -96,6 +99,47 @@ class ProjectProcessingService:
         if not project:
             raise ValueError(f"项目不存在: {project_id}")
         return project
+
+    async def _clean_existing_data(self, db_session, project_id: str) -> None:
+        """
+        清理项目已有的数据，避免重复处理
+
+        Args:
+            db_session: 数据库会话
+            project_id: 项目ID
+        """
+        logger.info(f"开始清理项目 {project_id} 的已有数据")
+
+        try:
+            # 1. 删除句子数据
+            deleted_sentences = await Sentence.delete_by_project_id(db_session, project_id)
+            logger.info(f"删除了 {deleted_sentences} 个句子")
+
+            # 2. 删除段落数据
+            deleted_paragraphs = await Paragraph.delete_by_project_id(db_session, project_id)
+            logger.info(f"删除了 {deleted_paragraphs} 个段落")
+
+            # 3. 删除章节数据
+            deleted_chapters = await Chapter.delete_by_project_id(db_session, project_id)
+            logger.info(f"删除了 {deleted_chapters} 个章节")
+
+            # 4. 重置项目统计信息
+            project = await db_session.get(Project, project_id)
+            if project:
+                project.chapter_count = 0
+                project.paragraph_count = 0
+                project.sentence_count = 0
+                project.word_count = 0
+                project.processing_progress = 0
+                project.error_message = None
+                project.completed_at = None
+                await db_session.flush()
+
+            logger.info(f"项目 {project_id} 数据清理完成")
+
+        except Exception as e:
+            logger.error(f"清理项目 {project_id} 数据时出错: {e}")
+            # 不抛出异常，允许流程继续
 
     async def _update_project_status(self, db_session, project: Project, status: ProjectStatus,
                                      progress: int, error_message: Optional[str] = None) -> None:

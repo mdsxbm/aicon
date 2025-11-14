@@ -6,11 +6,11 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, List, Dict
+from typing import Dict, List, TYPE_CHECKING
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy import select
+from sqlalchemy.orm import relationship
 
 from .base import BaseModel
 
@@ -82,7 +82,6 @@ class Sentence(BaseModel):
     )
 
     def __repr__(self) -> str:
-        content_preview = (self.content[:30] + '...') if len(self.content) > 30 else self.content
         return f"<Sentence(id={self.id}, order={self.order_index}, status={self.status})>"
 
     # ==================== 批量操作方法 ====================
@@ -191,7 +190,7 @@ class Sentence(BaseModel):
         """
         result = await db_session.execute(
             select(cls).where(cls.paragraph_id == paragraph_id)
-                        .order_by(cls.order_index)
+            .order_by(cls.order_index)
         )
         return result.scalars().all()
 
@@ -256,10 +255,53 @@ class Sentence(BaseModel):
         """
         result = await db_session.execute(
             select(cls).where(cls.status == SentenceStatus.PENDING.value)
-                        .order_by(cls.created_at)
-                        .limit(limit)
+            .order_by(cls.created_at)
+            .limit(limit)
         )
         return result.scalars().all()
+
+    @classmethod
+    async def delete_by_project_id(cls, db_session, project_id: str) -> int:
+        """
+        删除项目的所有句子
+
+        Args:
+            db_session: 数据库会话
+            project_id: 项目ID
+
+        Returns:
+            删除的句子数量
+        """
+        # 通过嵌套子查询删除项目的所有句子
+        from src.models.paragraph import Paragraph
+        from src.models.chapter import Chapter
+
+        # 先统计数量
+        result = await db_session.execute(
+            select(func.count(cls.id)).where(cls.paragraph_id.in_(
+                select(Paragraph.id).where(
+                    Paragraph.chapter_id.in_(
+                        select(Chapter.id).where(Chapter.project_id == project_id)
+                    )
+                )
+            ))
+        )
+        count = result.scalar()
+
+        if count > 0:
+            # 执行删除
+            await db_session.execute(
+                cls.__table__.delete().where(cls.paragraph_id.in_(
+                    select(Paragraph.id).where(
+                        Paragraph.chapter_id.in_(
+                            select(Chapter.id).where(Chapter.project_id == project_id)
+                        )
+                    )
+                ))
+            )
+            await db_session.flush()
+
+        return count
 
 
 __all__ = [
