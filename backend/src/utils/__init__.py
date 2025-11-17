@@ -20,7 +20,6 @@ from .storage import (
 from .text_utils import (
     ParagraphSplitter,
     SentenceSplitter,
-    SentenceInfo,
     paragraph_splitter,
     sentence_splitter,
 )
@@ -42,7 +41,6 @@ __all__ = [
     # Text utilities
     "ParagraphSplitter",
     "SentenceSplitter",
-    "SentenceInfo",
     "paragraph_splitter",
     "sentence_splitter",
 ]

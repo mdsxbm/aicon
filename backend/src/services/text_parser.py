@@ -339,7 +339,7 @@ class TextParserService:
             chapters = self._split_long_chapter(cleaned_text)
 
         # 3. 导入文本分割工具
-        from src.utils.text_utils import paragraph_splitter, sentence_splitter,long_sentence_splitter
+        from src.utils.text_utils import paragraph_splitter, sentence_splitter
 
         chapters_data = []
         paragraphs_data = []
@@ -386,7 +386,7 @@ class TextParserService:
                 paragraphs_data.append(paragraph_data)
 
                 # 分割当前段落的句子
-                paragraph_sentences = long_sentence_splitter.split_text(cleaned_paragraph)
+                paragraph_sentences = sentence_splitter.split_text(cleaned_paragraph)
                 chapter_sentence_count += len(paragraph_sentences)
                 paragraph_data['sentence_count'] = len(paragraph_sentences)
 
