@@ -65,6 +65,26 @@
       </div>
     </div>
 
+    <!-- 章节确认后的引导提示 -->
+    <el-alert
+      v-if="showDirectorGuidance"
+      type="success"
+      title="章节已确认！"
+      :closable="true"
+      @close="showDirectorGuidance = false"
+      style="margin: 16px 20px;"
+    >
+      <template #default>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span>现在可以进入导演引擎为这个章节生成分镜脚本了</span>
+          <el-button type="primary" size="small" @click="goToDirector">
+            <el-icon><MagicStick /></el-icon>
+            进入导演引擎
+          </el-button>
+        </div>
+      </template>
+    </el-alert>
+
     <!-- 三栏布局 -->
     <div class="studio-body">
       <!-- 左侧：章节导航 -->
@@ -170,7 +190,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Check, Fold, Expand } from '@element-plus/icons-vue'
+import { ArrowLeft, Check, Fold, Expand, MagicStick } from '@element-plus/icons-vue'
 import { useProjectsStore } from '@/stores/projects'
 
 import ChapterNav from '@/components/studio/ChapterNav.vue'
@@ -193,6 +213,7 @@ const props = defineProps({
 })
 
 // 状态
+const showDirectorGuidance = ref(false)
 const projectTitle = ref('')
 const project = ref(null)  // 添加项目数据
 const chapters = ref([])
@@ -551,6 +572,9 @@ const handleChapterConfirm = async (chapter) => {
     await chaptersService.confirmChapter(chapter.id)
     ElMessage.success('章节确认成功')
     
+    // 显示导演引擎引导提示
+    showDirectorGuidance.value = true
+    
     // 重新加载章节列表 (reset=true 以避免重复添加)
     await loadChapters(true)
     
@@ -571,6 +595,14 @@ const handleConfirmCurrentChapter = () => {
   if (chapter) {
     handleChapterConfirm(chapter)
   }
+}
+
+// 进入导演引擎
+const goToDirector = () => {
+  router.push({
+    name: 'DirectorEngine',
+    params: { projectId: props.projectId }
+  })
 }
 
 const handleSave = async () => {

@@ -92,6 +92,12 @@ const routes = [
         name: 'ContentStudio',
         component: () => import('@/views/studio/ContentStudio.vue'),
         props: true
+      },
+      {
+        path: ':projectId/director',  // 添加这个路由
+        name: 'DirectorEngine',
+        component: () => import('@/views/studio/DirectorEngine.vue'),
+        props: true
       }
     ]
   },

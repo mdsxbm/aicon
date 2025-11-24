@@ -141,6 +141,12 @@
           进入内容工坊
         </el-button>
         <el-button
+          type="success"
+          @click="handleOpenDirector"
+        >
+          导演引擎
+        </el-button>
+        <el-button
           v-if="['completed', 'parsed'].includes(project.status)"
           type="primary"
           :icon="VideoPlay"
@@ -296,6 +302,14 @@
   const handleOpenStudio = () => {
     router.push({
       name: 'ContentStudio',
+      params: { projectId: props.projectId }
+    })
+  }
+
+  // 进入导演引擎
+  const handleOpenDirector = () => {
+    router.push({
+      name: 'DirectorEngine',
       params: { projectId: props.projectId }
     })
   }

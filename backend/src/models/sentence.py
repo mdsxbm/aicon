@@ -42,6 +42,7 @@ class Sentence(BaseModel):
     # 生成资源
     image_url = Column(String(500), nullable=True, comment="生成的图片URL")
     image_prompt = Column(Text, nullable=True, comment="图片生成提示词")
+    image_style = Column(String(100), nullable=True, comment="图片风格")
     audio_url = Column(String(500), nullable=True, comment="生成的音频URL")
 
     # 时间轴信息（来自ASR）
