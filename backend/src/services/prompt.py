@@ -109,73 +109,75 @@ class PromptService(SessionManagedService):
         Raises:
             BusinessLogicError: 当API调用失败或参数无效时
         """
-        # 1.查找出章节
-        chapter_server = ChapterService(self.db_session)
-        sentences = await chapter_server.get_sentences(chapter_id, SentenceStatus.PENDING)
-        if len(sentences) == 0:
-            raise NotFoundError("查询不到段落数据", resource_id=chapter_id, resource_type='chapter')
+        # 确保使用正确的上下文管理
+        async with self:
+            # 1.查找出章节
+            chapter_server = ChapterService(self.db_session)
+            sentences = await chapter_server.get_sentences(chapter_id, SentenceStatus.PENDING)
+            if len(sentences) == 0:
+                raise NotFoundError("未处理句子数据为空", resource_id=chapter_id, resource_type='chapter')
 
-        # 2.查询获取api_key
-        api_key_service = APIKeyService(self.db_session)
+            # 2.查询获取api_key
+            api_key_service = APIKeyService(self.db_session)
 
-        # 获取项目owner_id作为用户ID
-        chapter = sentences[0].paragraph.chapter
-        user_id = chapter.project.owner_id
+            # 获取项目owner_id作为用户ID
+            chapter = sentences[0].paragraph.chapter
+            user_id = chapter.project.owner_id
 
-        api_key = await api_key_service.get_api_key_by_id(api_key_id, user_id)
-        if not api_key:
-            raise NotFoundError("未找到API密钥", resource_id=api_key_id, resource_type='api_key')
+            api_key = await api_key_service.get_api_key_by_id(api_key_id, user_id)
+            if not api_key:
+                raise NotFoundError("未找到API密钥", resource_id=api_key_id, resource_type='api_key')
 
-        # 3.创建LLM提供商实例
-        logger.info(f"创建LLM提供商实例: provider={api_key.provider}, max_concurrency=5")
-        llm_provider = ProviderFactory.create(provider=api_key.provider, api_key=api_key.get_api_key(),
-                                              max_concurrency=5)
+            # 3.创建LLM提供商实例
+            logger.info(f"创建LLM提供商实例: provider={api_key.provider}, max_concurrency=5")
+            llm_provider = ProviderFactory.create(provider=api_key.provider, api_key=api_key.get_api_key(),
+                                                max_concurrency=5)
 
-        # 4.构建系统提示词（修改为处理单个句子）
-        base_prompt = """你是一个专业的AI绘画提示词生成专家(AI Director)。
-你的任务是将中文小说句子转换为高质量的英文Stable Diffusion提示词。
+            # 4.构建系统提示词（修改为处理单个句子）
+            base_prompt = """你是一个专业的AI绘画提示词生成专家(AI Director)。
+            你的任务是将中文小说句子转换为高质量的英文Stable Diffusion提示词。
 
-请遵循以下规则：
-1. 输出格式必须是纯文本，不要包含markdown标记或其他文字。
-2. 直接输出英文提示词，不要有任何前缀或后缀。
-3. 提示词结构：(Subject description), (Action/Pose), (Environment/Background), (Lighting/Atmosphere), (Style modifiers), (Quality tags)
-4. 翻译要准确传达原文的意境、情感和视觉要素。
-5. 如果句子是心理描写或无具体画面，请生成符合上下文氛围的意象画面。
+            请遵循以下规则：
+            1. 输出格式必须是纯文本，不要包含markdown标记或其他文字。
+            2. 直接输出英文提示词，不要有任何前缀或后缀。
+            3. 提示词结构：(Subject description), (Action/Pose), (Environment/Background), (Lighting/Atmosphere), (Style modifiers), (Quality tags)
+            4. 翻译要准确传达原文的意境、情感和视觉要素。
+            5. 如果句子是心理描写或无具体画面，请生成符合上下文氛围的意象画面。
 
-"""
-        style_suffix = self.STYLE_TEMPLATES.get(style, self.STYLE_TEMPLATES["cinematic"])
-        system_prompt = base_prompt + f"风格要求：{style_suffix}"
-        logger.debug(f"构建系统提示词完成，风格: {style}")
+            """
+            style_suffix = self.STYLE_TEMPLATES.get(style, self.STYLE_TEMPLATES["cinematic"])
+            system_prompt = base_prompt + f"风格要求：{style_suffix}"
+            logger.debug(f"构建系统提示词完成，风格: {style}")
 
-        # 5.为每个句子创建并发送LLM请求（并发）
-        # 并发处理所有句子
-        logger.info(f"开始并发处理所有句子，总数: {len(sentences)}")
-        tasks = [process_sentence(sentence, api_key, llm_provider, system_prompt) for sentence in sentences]
-        results = await asyncio.gather(*tasks)
-        logger.info(f"所有句子处理完成，成功生成 {len(results)} 个提示词")
+            # 5.为每个句子创建并发送LLM请求（并发）
+            # 并发处理所有句子
+            logger.info(f"开始并发处理所有句子，总数: {len(sentences)}")
+            tasks = [process_sentence(sentence, api_key, llm_provider, system_prompt) for sentence in sentences]
+            results = await asyncio.gather(*tasks)
+            logger.info(f"所有句子处理完成，成功生成 {len(results)} 个提示词")
 
-        # 6.保存结果到数据库
-        logger.info("开始更新数据库，保存提示词结果")
-        for sentence, prompt in results:
-            sentence.image_prompt = prompt
-            sentence.status = SentenceStatus.GENERATED_PROMPTS
-            sentence.image_style = style
-            logger.debug(f"更新句子: sentence_id={sentence.id}, status=completed")
+            # 6.保存结果到数据库
+            logger.info("开始更新数据库，保存提示词结果")
+            for sentence, prompt in results:
+                sentence.image_prompt = prompt
+                sentence.status = SentenceStatus.GENERATED_PROMPTS
+                sentence.image_style = style
+                logger.debug(f"更新句子: sentence_id={sentence.id}, status=completed")
 
-        # 7.更新章节状态为提示词生成完成
-        chapter.status = ChapterStatus.GENERATED_PROMPTS.value
-        logger.info(f"更新章节状态: chapter_id={chapter.id}, status={chapter.status}")
+            # 7.更新章节状态为提示词生成完成
+            chapter.status = ChapterStatus.GENERATED_PROMPTS.value
+            logger.info(f"更新章节状态: chapter_id={chapter.id}, status={chapter.status}")
 
-        # 批量更新
-        logger.info("执行数据库批量更新")
-        await self.db_session.flush()
-        await self.db_session.commit()
-        logger.info("数据库更新完成")
+            # 批量更新
+            logger.info("执行数据库批量更新")
+            await self.db_session.flush()
+            await self.db_session.commit()
+            logger.info("数据库更新完成")
 
-        # 7.更新API密钥使用统计
-        logger.info(f"更新API密钥使用统计: api_key_id={api_key_id}")
-        await api_key_service.update_usage(api_key_id, user_id)
-        logger.info("API密钥使用统计更新完成")
+            # 7.更新API密钥使用统计
+            logger.info(f"更新API密钥使用统计: api_key_id={api_key_id}")
+            await api_key_service.update_usage(api_key_id, user_id)
+            logger.info("API密钥使用统计更新完成")
 
     def _build_system_prompt(self, style: str) -> str:
         """

@@ -52,7 +52,7 @@ class SentenceResponse(UUIDMixin, SentenceBase):
     status: SentenceStatus = Field(..., description="处理状态")
     image_url: Optional[str] = Field(None, description="生成的图片URL")
     image_style: Optional[str] = Field(None, description="图片风格")
-    edited_prompt: Optional[str] = Field(None, description="编辑后的提示词")
+    image_prompt: Optional[str] = Field(None, description="编辑后的提示词")
     audio_url: Optional[str] = Field(None, description="生成的音频URL")
     created_at: str = Field(..., description="创建时间")
     updated_at: str = Field(..., description="更新时间")

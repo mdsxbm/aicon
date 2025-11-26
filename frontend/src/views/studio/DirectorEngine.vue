@@ -2,43 +2,61 @@
   <div class="director-mode">
     <div class="toolbar">
       <el-form :inline="true" class="filter-form">
-        <el-form-item label="选择章节" style="width: 250px">
+        <el-form-item label="选择章节" style="width: 300px">
           <el-select v-model="selectedChapterId" placeholder="请选择已确认的章节" @change="loadSentences">
             <el-option
               v-for="chapter in chapters"
               :key="chapter.id"
-              :label="`第${chapter.chapter_number}章: ${chapter.title}`"
+              :label="`第${chapter.chapter_number}章: ${chapter.title} (${chapter.status})`"
               :value="chapter.id"
             />
           </el-select>
         </el-form-item>
         
-        <el-form-item label="API Key" style="width: 250px">
-          <el-select v-model="selectedApiKey" placeholder="选择API Key">
-            <el-option
-              v-for="key in apiKeys"
-              :key="key.id"
-              :label="key.name + ' (' + key.provider + ')'"
-              :value="key.id"
-            />
-          </el-select>
-        </el-form-item>
-        
-        <el-form-item label="风格" style="width: 250px">
-          <el-select v-model="selectedStyle" placeholder="选择风格">
-            <el-option label="电影质感 (Cinematic)" value="cinematic" />
-            <el-option label="二次元 (Anime)" value="anime" />
-            <el-option label="插画 (Illustration)" value="illustration" />
-            <el-option label="水墨 (Ink)" value="ink" />
-          </el-select>
-        </el-form-item>
-        
-        <el-form-item>
-          <el-button type="primary" :loading="generating" @click="generatePrompts">
+        <el-form-item v-if="selectedChapterId">
+          <el-button type="primary" @click="dialogVisible = true">
             生成分镜脚本
           </el-button>
         </el-form-item>
       </el-form>
+      
+      <!-- 生成提示词对话框 -->
+      <el-dialog
+        v-model="dialogVisible"
+        title="生成分镜脚本"
+        width="500px"
+      >
+        <el-form :inline="false" class="dialog-form">
+          <el-form-item label="API Key" style="width: 100%">
+            <el-select v-model="selectedApiKey" placeholder="选择API Key" style="width: 100%">
+              <el-option
+                v-for="key in apiKeys"
+                :key="key.id"
+                :label="key.name + ' (' + key.provider + ')'"
+                :value="key.id"
+              />
+            </el-select>
+          </el-form-item>
+          
+          <el-form-item label="风格" style="width: 100%">
+            <el-select v-model="selectedStyle" placeholder="选择风格" style="width: 100%">
+              <el-option label="电影质感 (Cinematic)" value="cinematic" />
+              <el-option label="二次元 (Anime)" value="anime" />
+              <el-option label="插画 (Illustration)" value="illustration" />
+              <el-option label="水墨 (Ink)" value="ink" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+        
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="dialogVisible = false">取消</el-button>
+            <el-button type="primary" :loading="generating" @click="generatePrompts">
+              生成
+            </el-button>
+          </span>
+        </template>
+      </el-dialog>
     </div>
 
     <div class="content-area" v-loading="loading">
@@ -52,9 +70,9 @@
           </div>
           
           <div class="prompt-editor">
-            <div class="label">AI Prompt:</div>
+            <div class="label">图片 Prompt:</div>
             <el-input
-              v-model="sentence.edited_prompt"
+              v-model="sentence.image_prompt"
               type="textarea"
               :rows="3"
               placeholder="等待生成..."
@@ -92,6 +110,7 @@ const selectedApiKey = ref('')
 const selectedStyle = ref('cinematic')
 const loading = ref(false)
 const generating = ref(false)
+const dialogVisible = ref(false)
 
 // 加载已确认的章节
 const loadChapters = async () => {
@@ -152,6 +171,8 @@ const generatePrompts = async () => {
     
     if (response.success) {
       ElMessage.success(response.message)
+      dialogVisible.value = false // 关闭对话框
+      await loadChapters() // 重新加载章节列表以显示更新后的状态
       await loadSentences() // 重新加载以显示生成的Prompt
     }
   } catch (error) {
