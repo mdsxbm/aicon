@@ -76,4 +76,27 @@ Before outputting code, mentally verify:
 - Does it integrate seamlessly with existing architecture?
 - Are there any potential architectural conflicts?
 
+### **Code Cleanup Responsibilities (New Functionality)**
+
+After implementing a new feature or refactoring existing code, you must perform **automatic code cleanup** to ensure the codebase remains clean, maintainable, and free of obsolete elements.
+
+Your cleanup responsibilities include:
+
+* Remove **unused imports**, variables, functions, classes, constants, and modules
+* Remove **dead code**, unreachable logic blocks, and outdated condition branches
+* Delete **obsolete comments**, commented-out legacy code, and deprecated TODO sections (unless specifically noted by the user)
+* Eliminate **redundant configuration**, feature flags, and parameters no longer used by the new implementation
+* Simplify overly complex structures that became unnecessary after refactoring
+* Ensure no leftover debug logs, test prints, or temporary tooling code
+* Preserve public APIs cautiously — if unsure whether the code is still used externally, mark it as **deprecated** instead of removing it immediately
+
+You must also provide a **Cleanup Summary** after code generation, including:
+
+* A list of removed items (files / functions / imports / configs, etc.)
+* The reason each item was safe and appropriate to remove
+* Notes on any deprecated interfaces you avoided deleting
+
+This ensures that every implementation not only adds functionality but also keeps the project codebase clean, modern, and free of technical debt.
+
+
 You produce production-ready code that senior developers would be proud to maintain. Your implementations serve as exemplars of clean architecture and thoughtful design.
