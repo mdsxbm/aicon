@@ -32,7 +32,7 @@
               <el-option
                 v-for="key in apiKeys"
                 :key="key.id"
-                :label="key.name + ' (' + key.provider + ')'"
+                :label="`${key.name} (${key.provider})`"
                 :value="key.id"
               />
             </el-select>
@@ -53,44 +53,6 @@
             <el-button @click="dialogVisible = false">取消</el-button>
             <el-button type="primary" :loading="generating" @click="generatePrompts">
               生成
-            </el-button>
-          </span>
-        </template>
-      </el-dialog>
-      
-      <!-- 查看/编辑提示词对话框 -->
-      <el-dialog
-        v-model="promptDialogVisible"
-        :title="promptDialogTitle"
-        width="600px"
-      >
-        <el-form :inline="false" class="dialog-form">
-          <el-form-item label="句子内容" style="width: 100%">
-            <el-input
-              v-model="currentSentence.content"
-              type="textarea"
-              :rows="2"
-              readonly
-              placeholder="句子内容"
-            />
-          </el-form-item>
-          
-          <el-form-item label="图片 Prompt" style="width: 100%">
-            <el-input
-              v-model="currentSentence.image_prompt"
-              type="textarea"
-              :rows="6"
-              placeholder="提示词内容"
-              :disabled="!isEditingPrompt"
-            />
-          </el-form-item>
-        </el-form>
-        
-        <template #footer>
-          <span class="dialog-footer">
-            <el-button @click="promptDialogVisible = false">关闭</el-button>
-            <el-button v-if="isEditingPrompt" type="primary" @click="savePrompt">
-              保存
             </el-button>
           </span>
         </template>
@@ -165,6 +127,15 @@
         </el-card>
       </div>
     </div>
+    
+    <!-- 查看/编辑提示词对话框 - 使用新组件 -->
+    <PromptDialog
+      v-model:visible="promptDialogVisible"
+      v-model:sentence="currentSentence"
+      :is-editing="isEditingPrompt"
+      :dialog-title="promptDialogTitle"
+      @save="handlePromptSave"
+    />
   </div>
 </template>
 
@@ -176,6 +147,7 @@ import { Setting, MagicStick, Microphone, Camera } from '@element-plus/icons-vue
 import chaptersService from '@/services/chapters'
 import apiKeysService from '@/services/apiKeys'
 import api from '@/services/api'
+import PromptDialog from '@/components/studio/PromptDialog.vue'
 
 const route = useRoute()
 
@@ -378,25 +350,12 @@ const generateSingleImage = async (sentence) => {
   }
 }
 
-// 保存编辑后的提示词
-const savePrompt = async () => {
-  try {
-    const response = await api.put(`/sentences/${currentSentence.value.id}/prompt`, {
-      prompt: currentSentence.value.image_prompt
-    })
-    
-    if (response.success) {
-      ElMessage.success('提示词保存成功')
-      // 更新原句子的提示词
-      const index = sentences.value.findIndex(s => s.id === currentSentence.value.id)
-      if (index !== -1) {
-        sentences.value[index].image_prompt = currentSentence.value.image_prompt
-      }
-      promptDialogVisible.value = false
-    }
-  } catch (error) {
-    console.error('保存提示词失败', error)
-    ElMessage.error('保存提示词失败: ' + (error.response?.data?.detail || error.message))
+// 处理提示词保存
+const handlePromptSave = (updatedSentence) => {
+  // 更新原句子的提示词
+  const index = sentences.value.findIndex(s => s.id === updatedSentence.id)
+  if (index !== -1) {
+    sentences.value[index].image_prompt = updatedSentence.image_prompt
   }
 }
 
