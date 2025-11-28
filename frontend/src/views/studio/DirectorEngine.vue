@@ -57,6 +57,44 @@
           </span>
         </template>
       </el-dialog>
+      
+      <!-- 重新生成提示词对话框 -->
+      <el-dialog
+        v-model="regenerateDialogVisible"
+        title="重新生成提示词"
+        width="500px"
+      >
+        <el-form :inline="false" class="dialog-form">
+          <el-form-item label="API Key" style="width: 100%">
+            <el-select v-model="regenerateApiKey" placeholder="选择API Key" style="width: 100%">
+              <el-option
+                v-for="key in apiKeys"
+                :key="key.id"
+                :label="`${key.name} (${key.provider})`"
+                :value="key.id"
+              />
+            </el-select>
+          </el-form-item>
+          
+          <el-form-item label="风格" style="width: 100%">
+            <el-select v-model="regenerateStyle" placeholder="选择风格" style="width: 100%">
+              <el-option label="电影质感 (Cinematic)" value="cinematic" />
+              <el-option label="二次元 (Anime)" value="anime" />
+              <el-option label="插画 (Illustration)" value="illustration" />
+              <el-option label="水墨 (Ink)" value="ink" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+        
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="regenerateDialogVisible = false">取消</el-button>
+            <el-button type="primary" :loading="regenerating" @click="regeneratePrompts">
+              重新生成
+            </el-button>
+          </span>
+        </template>
+      </el-dialog>
     </div>
 
     <div class="content-area" v-loading="loading">
@@ -94,11 +132,12 @@
             <el-button
               type="primary"
               :loading="loadingStates[sentence.id]?.generatingPrompt"
-              @click="generateSinglePrompt(sentence)"
+              @click="handleRegeneratePrompt(sentence)"
               size="small"
+              v-show="sentence.image_prompt"
             >
               <el-icon><MagicStick /></el-icon>
-              生成提示词
+              重新生成提示词
             </el-button>
             
             <el-button
@@ -174,6 +213,13 @@ const promptDialogTitle = ref('')
 const currentSentence = ref({})
 const isEditingPrompt = ref(false)
 const loadingStates = ref({})
+
+// 重新生成提示词相关状态
+const regenerateDialogVisible = ref(false)
+const regenerateApiKey = ref('')
+const regenerateStyle = ref('cinematic')
+const regenerating = ref(false)
+const selectedSentenceIds = ref([])
 
 // 加载已确认的章节
 const loadChapters = async () => {
@@ -270,37 +316,6 @@ const handlePromptAction = (action, sentence) => {
   promptDialogVisible.value = true
 }
 
-// 生成单个句子的提示词
-const generateSinglePrompt = async (sentence) => {
-  if (!selectedApiKey.value) {
-    ElMessage.warning('请先选择API Key')
-    return
-  }
-  
-  // 更新加载状态
-  loadingStates.value[sentence.id].generatingPrompt = true
-  
-  try {
-    const response = await api.post('/prompt/generate-single-prompt', {
-      sentence_id: sentence.id,
-      api_key_id: selectedApiKey.value,
-      style: selectedStyle.value
-    })
-    
-    if (response.success) {
-      ElMessage.success('提示词生成成功')
-      // 更新句子的提示词
-      sentence.image_prompt = response.prompt
-    }
-  } catch (error) {
-    console.error('生成单个提示词失败', error)
-    ElMessage.error('生成提示词失败: ' + (error.response?.data?.detail || error.message))
-  } finally {
-    // 重置加载状态
-    loadingStates.value[sentence.id].generatingPrompt = false
-  }
-}
-
 // 生成单个句子的音频
 const generateSingleAudio = async (sentence) => {
   // 更新加载状态
@@ -346,6 +361,43 @@ const generateSingleImage = async (sentence) => {
   } finally {
     // 重置加载状态
     loadingStates.value[sentence.id].generatingImage = false
+  }
+}
+
+// 处理重新生成提示词
+const handleRegeneratePrompt = (sentence) => {
+  // 设置当前句子ID
+  selectedSentenceIds.value = [sentence.id]
+  // 打开重新生成提示词对话框
+  regenerateDialogVisible.value = true
+}
+
+// 批量生成提示词
+const regeneratePrompts = async () => {
+  if (!regenerateApiKey.value || selectedSentenceIds.value.length === 0) {
+    ElMessage.warning('请选择API Key和要重新生成的句子')
+    return
+  }
+  
+  regenerating.value = true
+  try {
+    // 调用新的后端接口
+    const response = await api.post('/prompt/generate-prompts-ids', {
+      api_key_id: regenerateApiKey.value,
+      sentence_ids: selectedSentenceIds.value,
+      style: regenerateStyle.value
+    })
+    
+    if (response.success) {
+      ElMessage.success(response.message)
+      regenerateDialogVisible.value = false // 关闭对话框
+      await loadSentences() // 重新加载以显示生成的Prompt
+    }
+  } catch (error) {
+    console.error('重新生成失败', error)
+    ElMessage.error('重新生成失败: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    regenerating.value = false
   }
 }
 

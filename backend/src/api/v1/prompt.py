@@ -67,7 +67,7 @@ async def generate_prompts(
     return PromptGenerateResponse(success=True, message="提示词生成任务已提交")
 
 
-@router.post("/prompt/generate-prompts-ids", response_model=PromptGenerateResponse)
+@router.post("/generate-prompts-ids", response_model=PromptGenerateResponse)
 async def generate_prompts(
         *,
         current_user: User = Depends(get_current_user_required),
@@ -83,8 +83,8 @@ async def generate_prompts(
     # 1. 投递任务到celery
     result = generate_prompts_by_ids.delay(request.sentence_ids, request.api_key_id.hex, request.style)
 
-    logger.info(f"成功为章节 {request.chapter_id} 投递提示词生成任务，任务ID: {result.id}")
-    return PromptGenerateResponse(success=True, message="提示词生成任务已提交")
+    logger.info(f"成功为章节 {request.sentence_ids} 投递提示词生成任务，任务ID: {result.id}")
+    return PromptGenerateResponse(success=True, message="提示词生成任务已提交，请稍后查看结果。")
 
 
 __all__ = ["router"]

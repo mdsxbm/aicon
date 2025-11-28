@@ -181,7 +181,7 @@ def generate_prompts(self, chapter_id: str, api_key_id: str, style: str):
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_jitter=True,
-    name="generate.generate_prompts"
+    name="generate.generate_prompts_by_ids"
 )
 def generate_prompts_by_ids(self, sentence_ids: List[str], api_key_id: str, style: str):
     """

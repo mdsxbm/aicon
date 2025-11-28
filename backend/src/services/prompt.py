@@ -11,9 +11,12 @@ AI导演引擎 - 提示词生成服务（优化版，含完整注释）
 import asyncio
 from typing import List
 
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
 from src.core.exceptions import NotFoundError
 from src.core.logging import get_logger
-from src.models import Sentence, APIKey, ChapterStatus, SentenceStatus
+from src.models import Sentence, APIKey, ChapterStatus, SentenceStatus, Paragraph, Chapter
 from src.services import ChapterService
 from src.services.api_key import APIKeyService
 from src.services.base import SessionManagedService
@@ -159,7 +162,8 @@ class PromptService(SessionManagedService):
     # 核心共用逻辑：并发生成 + 保存数据库 + 更新状态
     # ------------------------------------------------------------
 
-    async def _generate_prompts(self, sentences: List[Sentence], api_key: APIKey, style: str):
+    async def _generate_prompts(self, sentences: List[Sentence], api_key: APIKey, style: str,
+                                update: bool = True) -> None:
         """
         核心执行方法：批量生成提示词 + 写数据库 + 更新章节状态。
 
@@ -167,6 +171,7 @@ class PromptService(SessionManagedService):
             sentences (List[Sentence]): 待处理句子列表
             api_key (APIKey): API Key 对象
             style (str): 生成提示词的风格
+            update (bool): 是否更新章节，默认为 True
         """
 
         # 构建完整系统提示词
@@ -200,9 +205,10 @@ class PromptService(SessionManagedService):
             sentence.status = SentenceStatus.GENERATED_PROMPTS
             sentence.image_style = style
 
-        # 统一更新章节状态
         chapter = sentences[0].paragraph.chapter
-        chapter.status = ChapterStatus.GENERATED_PROMPTS.value
+        if update:
+            # 统一更新章节状态
+            chapter.status = ChapterStatus.GENERATED_PROMPTS.value
 
         # 提交数据库
         await self.db_session.flush()
@@ -257,13 +263,12 @@ class PromptService(SessionManagedService):
         """
         async with self:
             # 根据 ID 查询句子
-            stmt = await self.db_session.execute(
-                Sentence.__table__.select().where(
-                    Sentence.id.in_(sentence_ids)
-                )
+            stmt = select(Sentence).where(Sentence.id.in_(sentence_ids)).options(
+                selectinload(Sentence.paragraph).selectinload(Paragraph.chapter).selectinload(Chapter.project)
             )
 
-            sentences = stmt.scalars().all()
+            result = await self.execute(stmt)
+            sentences = result.scalars().all()
 
             if not sentences:
                 raise NotFoundError(
@@ -277,7 +282,7 @@ class PromptService(SessionManagedService):
             api_key = await self._load_api_key(api_key_id, user_id)
 
             # 执行批量生成
-            await self._generate_prompts(sentences, api_key, style)
+            await self._generate_prompts(sentences, api_key, style, False)
 
 
 prompt_service = PromptService()
