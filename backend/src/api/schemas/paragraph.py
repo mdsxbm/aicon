@@ -35,6 +35,8 @@ class ParagraphUpdate(BaseModel):
             "example": {
                 "content": "更新后的段落内容",
                 "action": "edit",
+                "edited_content": "编辑后的内容",
+                "ignore_reason": None
             }
         }
     }
@@ -77,7 +79,7 @@ class ParagraphBatchUpdateItem(BaseModel):
     id: str = Field(..., description="段落ID")
     content: Optional[str] = Field(None, description="段落内容")
     action: Optional[str] = Field(None, description="操作类型")
-    
+        
 
 class ParagraphBatchUpdate(BaseModel):
     """批量更新段落请求模型"""

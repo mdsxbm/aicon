@@ -51,7 +51,6 @@ class Project(BaseModel):
     processing_progress = Column(Integer, default=0, comment="0-100处理进度")
     error_message = Column(Text, nullable=True, comment="错误信息")
 
-  
     # 关系定义 - 按照data-model.md规范
     chapters = relationship("Chapter", back_populates="project", cascade="all, delete-orphan")
     # generation_tasks = relationship("GenerationTask", back_populates="project", cascade="all, delete-orphan")
@@ -64,7 +63,7 @@ class Project(BaseModel):
         Index('idx_project_file_hash', 'file_hash'),
     )
 
-  
+    
     def update_processing_progress(self, progress: int) -> None:
         """更新处理进度 - 按照data-model.md规范"""
         self.processing_progress = max(0, min(100, progress))

@@ -33,6 +33,8 @@ def upgrade():
         sa.Column('paragraph_count', sa.Integer(), nullable=True, default=0, comment='段落数量'),
         sa.Column('sentence_count', sa.Integer(), nullable=True, default=0, comment='句子数量'),
         sa.Column('status', sa.String(length=20), nullable=True, default='uploaded', comment='处理状态'),
+        sa.Column('processing_progress', sa.Integer(), nullable=True, default=0, comment='0-100处理进度'),
+        sa.Column('error_message', sa.Text(), nullable=True, comment='错误信息'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='创建时间'),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='更新时间'),
         sa.PrimaryKeyConstraint('id'),

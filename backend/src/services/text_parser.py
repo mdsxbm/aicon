@@ -358,7 +358,7 @@ class TextParserService:
                         start_position=prev_pos,
                         end_position=pos,
                         detection_method="auto_split",
-                                            ))
+                                                                    ))
                     chapter_num += 1
                 prev_pos = pos
 
@@ -373,7 +373,7 @@ class TextParserService:
                     start_position=prev_pos,
                     end_position=len(text),
                     detection_method="auto_split",
-                                    ))
+                                                            ))
 
         return chapters
 

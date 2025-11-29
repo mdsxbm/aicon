@@ -128,7 +128,7 @@ class ParagraphService(BaseService):
                         "word_count": len(sentence_text.replace(' ', '')),
                         "character_count": len(sentence_text),
                         "status": SentenceStatus.PENDING.value,
-                                            }
+                    }
                     sentences_data.append(sentence_data)
 
                 # 批量创建句子
@@ -290,7 +290,7 @@ class ParagraphService(BaseService):
                         "word_count": len(sentence_text.replace(' ', '')),
                         "character_count": len(sentence_text),
                         "status": SentenceStatus.PENDING.value,
-                                            }
+                    }
                     sentences_data.append(sentence_data)
 
                 # 批量创建句子
