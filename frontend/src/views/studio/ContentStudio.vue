@@ -180,6 +180,7 @@
             :loading="sentencesLoading"
             :is-maximized="inspectorMaximized"
             @toggle-maximize="inspectorMaximized = !inspectorMaximized"
+            @generate-audio="handleGenerateAudio"
             :read-only="readOnly"
           />
         </div>
@@ -191,6 +192,15 @@
       v-model="showChapterDialog"
       :chapter="editingChapter"
       @submit="handleChapterSubmit"
+    />
+
+    <!-- 音频生成对话框 -->
+    <GenerateAudioDialog
+      v-model:visible="generateAudioVisible"
+      :sentences-ids="singleAudioSentenceId ? [singleAudioSentenceId] : []"
+      :api-keys="apiKeys"
+      @generate-success="handleGenerateSuccess"
+      @update:visible="(val) => { if(!val) singleAudioSentenceId = null }"
     />
   </div>
 </template>
@@ -206,9 +216,11 @@ import ChapterNav from '@/components/studio/ChapterNav.vue'
 import ParagraphStream from '@/components/studio/ParagraphStream.vue'
 import SentenceInspector from '@/components/studio/SentenceInspector.vue'
 import ChapterFormDialog from '@/components/studio/ChapterFormDialog.vue'
+import GenerateAudioDialog from '@/components/studio/GenerateAudioDialog.vue'
 
 import chaptersService from '@/services/chapters'
 import paragraphsService from '@/services/paragraphs'
+import apiKeysService from '@/services/apiKeys'
 
 const router = useRouter()
 const route = useRoute()
@@ -263,6 +275,11 @@ const showInspector = ref(true)
 const inspectorMaximized = ref(false)
 const leftPanelWidth = ref(280)
 const rightPanelWidth = ref(320)
+
+// 音频生成状态
+const apiKeys = ref([])
+const generateAudioVisible = ref(false)
+const singleAudioSentenceId = ref(null)
 
 // 调整大小逻辑
 const startResizeLeft = (e) => {
@@ -724,10 +741,37 @@ onBeforeRouteLeave((to, from, next) => {
   }
 })
 
+// 加载API Keys
+const loadApiKeys = async () => {
+  try {
+    const res = await apiKeysService.getAPIKeys()
+    apiKeys.value = res.api_keys || []
+  } catch (error) {
+    console.error('加载API Keys失败', error)
+  }
+}
+
+// 处理生成音频
+const handleGenerateAudio = (sentence) => {
+  singleAudioSentenceId.value = sentence.id
+  generateAudioVisible.value = true
+}
+
+const handleGenerateSuccess = (taskId) => {
+  ElNotification({
+    title: '任务已提交',
+    message: '音频生成任务正在后台执行',
+    type: 'info',
+    duration: 3000
+  })
+  generateAudioVisible.value = false
+}
+
 // 生命周期
 onMounted(async () => {
   await loadProject()
   await loadChapters(true)  // reset=true 首次加载
+  loadApiKeys()
 })
 </script>
 

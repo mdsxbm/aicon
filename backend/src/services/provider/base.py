@@ -35,3 +35,16 @@ class BaseLLMProvider(ABC):
         生成图像的调用（纯粹透传）
         """
         pass
+
+    @abstractmethod
+    async def generate_audio(
+            self,
+            input_text: str,
+            voice: str = "alloy",
+            model: str = "tts-1",
+            **kwargs: Any
+    ) -> Any:
+        """
+        生成音频的调用（纯粹透传）
+        """
+        pass

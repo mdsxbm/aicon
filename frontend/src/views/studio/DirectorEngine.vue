@@ -1,5 +1,10 @@
 <template>
-  <div class="director-mode">
+  <div 
+    class="director-mode"
+    v-loading="loading || isPolling"
+    :element-loading-text="loadingText"
+    element-loading-background="rgba(255, 255, 255, 0.8)"
+  >
     <!-- 任务完成统计信息 -->
     <div v-if="taskCompletionStats" class="task-completion-alert">
       <el-alert
@@ -34,8 +39,11 @@
           <el-button type="primary" @click="generatePromptsVisible = true">
             批量生成图片提示词
           </el-button>
-          <el-button type="warning" v-if="chapters.find(c => c.id === selectedChapterId)?.status === 'generated_prompts'" @click="batchGenerateImagesVisible = true">
+          <el-button type="warning"  @click="batchGenerateImagesVisible = true">
             批量生成图片
+          </el-button>
+          <el-button type="success"  @click="batchGenerateAudioVisible = true">
+            批量生成音频
           </el-button>
         </el-form-item>
       </el-form>
@@ -64,9 +72,18 @@
         @generate-success="(taskId) => handleGenerateSuccess(taskId, 'images')"
         @update:visible="(val) => { if(!val) singleImageSentenceId = null }"
       />
+
+      <!-- 批量生成音频对话框 -->
+      <GenerateAudioDialog
+        v-model:visible="batchGenerateAudioVisible"
+        :sentences-ids="singleAudioSentenceId ? [singleAudioSentenceId] : currentChapterSentenceIds"
+        :api-keys="apiKeys"
+        @generate-success="(taskId) => handleGenerateSuccess(taskId, 'audio')"
+        @update:visible="(val) => { if(!val) singleAudioSentenceId = null }"
+      />
     </div>
 
-    <div class="content-area" v-loading="loading || isPolling" :element-loading-text="loadingText">
+    <div class="content-area">
       <el-empty v-if="!sentences.length" description="请选择章节以开始" />
       
       <div v-else class="card-grid">
@@ -79,6 +96,7 @@
           @prompt-action="handlePromptAction"
           @regenerate-prompt="handleRegeneratePrompt"
           @regenerate-image="handleRegenerateImage"
+          @generate-audio="handleGenerateAudio"
           @update:loading-states="(newState) => updateSentenceLoadingState(sentence.id, newState)"
         />
       </div>
@@ -103,6 +121,7 @@ import { useTaskPoller } from '@/composables/useTaskPoller'
 import GeneratePromptsDialog from '@/components/studio/GeneratePromptsDialog.vue'
 import RegeneratePromptsDialog from '@/components/studio/RegeneratePromptsDialog.vue'
 import BatchGenerateImagesDialog from '@/components/studio/BatchGenerateImagesDialog.vue'
+import GenerateAudioDialog from '@/components/studio/GenerateAudioDialog.vue'
 import SentenceCard from '@/components/studio/SentenceCard.vue'
 import PromptDialog from '@/components/studio/PromptDialog.vue'
 
@@ -125,6 +144,7 @@ const {
   generatePromptsVisible,
   regeneratePromptsVisible,
   batchGenerateImagesVisible,
+  batchGenerateAudioVisible,
   selectedSentenceIds,
   loadSentences,
   updateSentenceLoadingState,
@@ -178,6 +198,11 @@ const showTaskStatistics = (statistics, taskType) => {
       总计: ${total} 张<br/>
       成功: <span style="color: #67C23A">${success}</span> 张<br/>
       失败: <span style="color: #F56C6C">${failed}</span> 张`
+  } else if (taskType === 'audio') {
+    message = `<strong>音频生成完成</strong><br/>
+      总计: ${total} 条<br/>
+      成功: <span style="color: #67C23A">${success}</span> 条<br/>
+      失败: <span style="color: #F56C6C">${failed}</span> 条`
   }
   
   taskCompletionStats.value = {
@@ -285,6 +310,13 @@ const handleRegenerateImage = (sentence) => {
 }
 
 const singleImageSentenceId = ref(null)
+const singleAudioSentenceId = ref(null)
+
+// 处理生成音频
+const handleGenerateAudio = (sentence) => {
+  singleAudioSentenceId.value = sentence.id
+  batchGenerateAudioVisible.value = true
+}
 
 // 处理提示词保存
 const handlePromptSave = (updatedSentence) => {

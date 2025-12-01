@@ -61,3 +61,23 @@ class SiliconFlowProvider(BaseLLMProvider):
                 prompt=prompt,
                 **kwargs
             )
+
+    async def generate_audio(
+            self,
+            input_text: str,
+            voice: str = "alloy",
+            model: str = "tts-1",
+            **kwargs: Any
+    ):
+        """
+        调用 OpenAI audio.speech.create（纯粹透传）
+        """
+
+        # 用 semaphore 限制并发
+        async with self.semaphore:
+            return await self.client.audio.speech.create(
+                model=model,
+                voice=voice,
+                input=input_text,
+                **kwargs
+            )

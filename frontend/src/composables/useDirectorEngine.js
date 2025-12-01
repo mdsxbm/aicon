@@ -17,6 +17,7 @@ export function useDirectorEngine(projectId) {
   const generatePromptsVisible = ref(false)
   const regeneratePromptsVisible = ref(false)
   const batchGenerateImagesVisible = ref(false)
+  const batchGenerateAudioVisible = ref(false)
   const selectedSentenceIds = ref([])
 
   // 加载已确认的章节
@@ -38,12 +39,12 @@ export function useDirectorEngine(projectId) {
   // 加载句子
   const loadSentences = async () => {
     if (!selectedChapterId.value) return
-    
+
     loading.value = true
     try {
       const response = await api.get(`/chapters/${selectedChapterId.value}/sentences`)
       sentences.value = response.sentences || []
-      
+
       // 初始化加载状态
       const initialLoadingStates = {}
       sentences.value.forEach(sentence => {
@@ -79,7 +80,7 @@ export function useDirectorEngine(projectId) {
       // 从接口获取最新的句子数据
       const response = await api.get(`/sentences/${sentence.id}`)
       const latestSentence = response
-      
+
       return {
         action,
         sentence: latestSentence
@@ -105,13 +106,15 @@ export function useDirectorEngine(projectId) {
     selectedChapterId,
     loading,
     loadingStates,
-    
+
     // 对话框状态
     generatePromptsVisible,
     regeneratePromptsVisible,
+    regeneratePromptsVisible,
     batchGenerateImagesVisible,
+    batchGenerateAudioVisible,
     selectedSentenceIds,
-    
+
     // 方法
     loadChapters,
     loadSentences,

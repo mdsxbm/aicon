@@ -234,6 +234,38 @@ def generate_images(self, api_key_id: str, sentences_ids: list[str]):
     return result
 
 
+@celery_app.task(
+    bind=True,
+    max_retries=1,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    name="generate.generate_audio"
+)
+def generate_audio(self, api_key_id: str, sentences_ids: list[str], voice: str = "alloy", model: str = "tts-1"):
+    """
+    为章节或指定句子批量生成音频的 Celery 任务
+
+    该任务仅负责调用服务层的音频生成逻辑，不包含业务逻辑。
+
+    Args:
+        api_key_id: API密钥ID
+        sentences_ids: 句子ID列表
+        voice: 语音风格
+        model: 模型名称
+
+    Returns:
+        Dict[str, Any]: 生成结果，包含统计信息
+    """
+    from src.services.audio import audio_service
+
+    logger.info(f"Celery任务开始: generate_audio (sentences_ids={sentences_ids})")
+
+    result = run_async_task(audio_service.generate_audio(api_key_id, sentences_ids, voice, model))
+    logger.info(f"Celery任务成功: generate_audio (sentences_ids={sentences_ids})")
+    return result
+
+
 # ---------------------------
 # 导出的任务列表
 # ---------------------------
@@ -243,5 +275,6 @@ __all__ = [
     'process_uploaded_file',
     'retry_failed_project',
     'generate_prompts',
-    'generate_images'
+    'generate_images',
+    'generate_audio'
 ]

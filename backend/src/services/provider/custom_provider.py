@@ -61,15 +61,38 @@ class CustomProvider(BaseLLMProvider):
                 **kwargs
             )
 
+    async def generate_audio(
+            self,
+            input_text: str,
+            voice: str = "alloy",
+            model: str = "tts-1",
+            **kwargs: Any
+    ):
+        """
+        调用 OpenAI audio.speech.create（纯粹透传）
+        """
+
+        # 用 semaphore 限制并发
+        async with self.semaphore:
+            return await self.client.audio.speech.create(
+                model=model,
+                voice=voice,
+                input=input_text,
+                **kwargs
+            )
+
 
 if __name__ == "__main__":
     import asyncio
 
 
     async def test():
-        provider = CustomProvider(api_key="sk-ibB9WqeYysBiJnjy8eF2B7290bEf409c8d92476c9086BeEa",
-                                  base_url="https://jyapi.ai-wx.cn/v1")
+        # provider = CustomProvider(api_key="sk-ibB9WqeYysBiJnjy8eF2B7290bEf409c8d92476c9086BeEa",
+        #                           base_url="https://jyapi.ai-wx.cn/v1")
+        provider = CustomProvider(api_key="sk-mrv4RQpMacJiNpA7T5h1yu8KAfkEdoPVvMOf1QM7ctDxEuGi",
+                                  base_url="https://api.vectorengine.ai/v1")
         response = await provider.generate_image("A beautiful sunset over the mountains", model="sora_image")
         print(response)
+
 
     asyncio.run(test())

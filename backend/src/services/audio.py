@@ -24,7 +24,6 @@ logger = get_logger(__name__)
 async def retry_with_backoff(task_fn, max_retries=5):
     """
     针对 429 限流错误加入指数退避重试机制
-
     """
     delay = 1.0
 
@@ -54,7 +53,7 @@ async def retry_with_backoff(task_fn, max_retries=5):
 
 
 # ============================================================
-# 处理单句 – 优化版（返回异常信息）
+# 处理单句 – 音频版
 # ============================================================
 
 async def process_sentence(
@@ -64,9 +63,11 @@ async def process_sentence(
         storage_client,
         user_id: str,
         db_session=None,
+        voice: str = "alloy",
+        model: str = "tts-1"
 ):
     """
-    单句 LLM 图片生成任务（含限流、错误透传）。
+    单句 LLM 音频生成任务（含限流、错误透传）。
 
     Args:
         sentence: 待处理的 Sentence 实例
@@ -75,77 +76,65 @@ async def process_sentence(
         storage_client: 存储客户端实例
         user_id: 用户ID
         db_session: 可选的数据库会话
+        voice: 语音风格
+        model: 模型名称
     """
     async with semaphore:
         try:
-            logger.info(f"[LLM] 处理句子 {sentence.id}")
+            logger.info(f"[LLM] 处理句子音频 {sentence.id}")
 
             # 加入重试机制
-            model_name = 'Qwen/Qwen-Image'
-            if llm_provider.__class__.__name__ == "CustomProvider":
-                model_name = 'sora_image'
-                model_name = 'doubao-seedream-3-0-t2i-250415'
-            result = await retry_with_backoff(
-                lambda: llm_provider.generate_image(
-                    prompt=sentence.image_prompt,
-                    model=model_name,
+            # 注意：OpenAI audio API 返回的是二进制内容，不是 URL
+            response = await retry_with_backoff(
+                lambda: llm_provider.generate_audio(
+                    input_text=sentence.content,
+                    voice=voice,
+                    model=model,
                 )
             )
 
-            image_url = result.data[0].url
+            # OpenAI SDK audio.speech.create 返回的是 HttpxBinaryResponseContent
+            # 需要读取 content
+            content = response.content
 
-            # --- 6. 统一的下载 Session ---
-            async with aiohttp.ClientSession() as http_session:
-                # --- 下载图片 ---
-                try:
-                    async with http_session.get(image_url) as resp:
-                        if resp.status != 200:
-                            logger.error(f"[Download] 失败 {resp.status} url={image_url}")
-                        content = await resp.read()
-                        # 要保存为临时文件上传到minio上
+            # --- 上传 MinIO ---
+            file_id = str(uuid.uuid4())
+            upload_file = UploadFile(
+                filename=f"{file_id}.mp3",
+                file=io.BytesIO(content),
+            )
 
+            storage_result = await storage_client.upload_file(
+                user_id=user_id,
+                file=upload_file,
+                metadata={
+                    "user_id": user_id,
+                    "file_id": file_id,
+                    "file_type": "audio/mpeg",
+                    "original_filename": f"{file_id}.mp3"
+                }
+            )
+            object_key = storage_result["object_key"]
 
-                except Exception as e:
-                    logger.error(f"[Download] 图片下载错误: {e}")
-
-                # --- 上传 MinIO ---
-                file_id = str(uuid.uuid4())
-                upload_file = UploadFile(
-                    filename=f"{file_id}.jpg",
-                    file=io.BytesIO(content),
-                )
-
-                storage_result = await storage_client.upload_file(
-                    user_id=user_id,
-                    file=upload_file,
-                    metadata={
-                        "user_id": user_id,
-                        "file_id": file_id,
-                        "file_type": "image/jpeg",
-                        "original_filename": f"{file_id}.jpg"
-                    }
-                )
-                object_key = storage_result["object_key"]
-
-                # --- 更新数据库 ---
-                sentence.image_url = object_key
-                sentence.status = SentenceStatus.GENERATED_IMAGE
-                await db_session.flush()
-                await db_session.commit()
+            # --- 更新数据库 ---
+            sentence.audio_url = object_key
+            sentence.status = SentenceStatus.GENERATED_AUDIO
+            db_session.flush()
+            db_session.commit()
             return True
 
         except Exception as e:
-            logger.error(f"[LLM] 句子 {sentence.id} 错误: {e}", exc_info=True)
+            logger.error(f"[LLM] 句子 {sentence.id} 音频生成错误: {e}", exc_info=True)
             return False
 
 
 # ============================================================
-# ImageService 主体
+# AudioService 主体
 # ============================================================
 
-class ImageService(SessionManagedService):
+class AudioService(SessionManagedService):
 
-    async def generate_images(self, api_key_id: str, sentence_ids: List[str]) -> dict:
+    async def generate_audio(self, api_key_id: str, sentence_ids: List[str], voice: str = "alloy", model: str = "tts-1") -> dict:
         async with self:
             # --- 1. 查询 Sentence ----
             stmt = (
@@ -185,11 +174,11 @@ class ImageService(SessionManagedService):
             # --- 5. 创建任务列表 ---
             storage_client = await get_storage_client()
             tasks = [
-                process_sentence(sentence, llm_provider, semaphore, storage_client, user_id, self.db_session)
+                process_sentence(sentence, llm_provider, semaphore, storage_client, user_id, self.db_session, voice, model)
                 for sentence in sentences
             ]
 
-            logger.info(f"[LLM] 开始并发处理，共 {len(tasks)} 项")
+            logger.info(f"[LLM] 开始并发处理音频，共 {len(tasks)} 项")
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -208,7 +197,7 @@ class ImageService(SessionManagedService):
             await self.db_session.flush()
             await self.db_session.commit()
 
-            logger.info("[FINISH] 所有任务完成")
+            logger.info("[FINISH] 所有音频任务完成")
 
             # 返回统计信息
             statistics = {
@@ -216,23 +205,9 @@ class ImageService(SessionManagedService):
                 "success": success_count,
                 "failed": failed_count
             }
-            logger.info(f"[STATS] 图片生成统计: {statistics}")
+            logger.info(f"[STATS] 音频生成统计: {statistics}")
             return statistics
 
 
-image_service = ImageService()
-__all__ = ["ImageService", "image_service"]
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    async def test():
-        service = ImageService()
-        result = await service.generate_images(
-            api_key_id="6861e67b-6731-4dca-b215-aade208b627f",
-            sentence_ids=["0bbe271a-e0d6-4565-be58-9c3d5898d732"]
-        )
-        print(result)
-
-    asyncio.run(test())
+audio_service = AudioService()
+__all__ = ["AudioService", "audio_service"]

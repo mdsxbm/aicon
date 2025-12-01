@@ -87,6 +87,9 @@
                   <el-button type="primary" link size="small" @click="startEdit(sentence)">
                     <el-icon><Edit /></el-icon>
                   </el-button>
+                  <el-button type="success" link size="small" @click="$emit('generate-audio', sentence)" title="生成音频">
+                    <el-icon><Microphone /></el-icon>
+                  </el-button>
                   <el-button type="danger" link size="small" @click="handleDelete(sentence)">
                     <el-icon><Delete /></el-icon>
                   </el-button>
@@ -129,7 +132,7 @@
 
 <script setup>
 import { ref, watch, onMounted } from 'vue'
-import { InfoFilled, Plus, Edit, Delete, FullScreen, Close } from '@element-plus/icons-vue'
+import { InfoFilled, Plus, Edit, Delete, FullScreen, Close, Microphone } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import sentencesService from '@/services/sentences'
 
@@ -152,7 +155,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['toggle-maximize'])
+const emit = defineEmits(['toggle-maximize', 'generate-audio'])
 
 // 状态
 const sentences = ref([])
