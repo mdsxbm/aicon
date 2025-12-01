@@ -63,7 +63,6 @@ async def process_sentence(
         semaphore: asyncio.Semaphore,
         storage_client,
         user_id: str,
-        db_session=None,
         model: str = None,
 ):
     """
@@ -83,18 +82,10 @@ async def process_sentence(
             logger.info(f"[LLM] 处理句子 {sentence.id}")
 
             # 加入重试机制
-            # 如果提供了model，使用它；否则根据供应商选择默认模型
-            if model:
-                model_name = model
-            else:
-                model_name = 'Qwen/Qwen-Image'
-                if llm_provider.__class__.__name__ == "CustomProvider":
-                    model_name = 'doubao-seedream-3-0-t2i-250415'
-            
             result = await retry_with_backoff(
                 lambda: llm_provider.generate_image(
                     prompt=sentence.image_prompt,
-                    model=model_name,
+                    model=model,
                 )
             )
 
@@ -136,8 +127,8 @@ async def process_sentence(
                 # --- 更新数据库 ---
                 sentence.image_url = object_key
                 sentence.status = SentenceStatus.GENERATED_IMAGE
-                await db_session.flush()
-                await db_session.commit()
+                # 注意：不在这里 flush/commit，避免并发冲突
+                # 统一在主函数中处理
             return True
 
         except Exception as e:
@@ -191,7 +182,7 @@ class ImageService(SessionManagedService):
             # --- 5. 创建任务列表 ---
             storage_client = await get_storage_client()
             tasks = [
-                process_sentence(sentence, llm_provider, semaphore, storage_client, user_id, self.db_session, model)
+                process_sentence(sentence, llm_provider, semaphore, storage_client, user_id, model)
                 for sentence in sentences
             ]
 
@@ -229,16 +220,20 @@ class ImageService(SessionManagedService):
 image_service = ImageService()
 __all__ = ["ImageService", "image_service"]
 
-
 if __name__ == "__main__":
     import asyncio
+
 
     async def test():
         service = ImageService()
         result = await service.generate_images(
+            # api_key_id="d538c04d-b2a5-49eb-b5cb-fbb6be3015cf",
             api_key_id="6861e67b-6731-4dca-b215-aade208b627f",
-            sentence_ids=["0bbe271a-e0d6-4565-be58-9c3d5898d732","abfb01b7-58d9-4fb0-849d-e9e5cdef6205",""]
+            sentence_ids=["0bbe271a-e0d6-4565-be58-9c3d5898d732", "abfb01b7-58d9-4fb0-849d-e9e5cdef6205"],
+            # model='gemini-2.5-flash-image'
+            model= 'sora_image'
         )
         print(result)
+
 
     asyncio.run(test())

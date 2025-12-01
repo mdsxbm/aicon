@@ -280,7 +280,7 @@ class APIKeyService(BaseService):
                 
         elif provider == 'custom':
             if model_type == "image":
-                return ['dall-e-3', 'doubao-seedream-3-0-t2i-250415', 'doubao-seedream-4-0-250828']
+                return ['dall-e-3', 'doubao-seedream-3-0-t2i-250415', 'doubao-seedream-4-0-250828','sora_image']
             elif model_type == "audio":
                 return ['gpt-4o-mini-tts', 'tts-1']
             else:

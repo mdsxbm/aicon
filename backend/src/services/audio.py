@@ -62,7 +62,6 @@ async def process_sentence(
         semaphore: asyncio.Semaphore,
         storage_client,
         user_id: str,
-        db_session=None,
         voice: str = "alloy",
         model: str = "tts-1"
 ):
@@ -120,8 +119,8 @@ async def process_sentence(
             # --- 更新数据库 ---
             sentence.audio_url = object_key
             sentence.status = SentenceStatus.GENERATED_AUDIO
-            db_session.flush()
-            db_session.commit()
+            # 注意：不在这里 flush/commit，避免并发冲突
+            # 统一在主函数中处理
             return True
 
         except Exception as e:
@@ -135,7 +134,8 @@ async def process_sentence(
 
 class AudioService(SessionManagedService):
 
-    async def generate_audio(self, api_key_id: str, sentence_ids: List[str], voice: str = "alloy", model: str = "tts-1") -> dict:
+    async def generate_audio(self, api_key_id: str, sentence_ids: List[str], voice: str = "alloy",
+                             model: str = "tts-1") -> dict:
         async with self:
             # --- 1. 查询 Sentence ----
             stmt = (
@@ -175,7 +175,7 @@ class AudioService(SessionManagedService):
             # --- 5. 创建任务列表 ---
             storage_client = await get_storage_client()
             tasks = [
-                process_sentence(sentence, llm_provider, semaphore, storage_client, user_id, self.db_session, voice, model)
+                process_sentence(sentence, llm_provider, semaphore, storage_client, user_id, voice, model)
                 for sentence in sentences
             ]
 

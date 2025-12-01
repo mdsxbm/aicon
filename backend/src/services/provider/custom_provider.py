@@ -1,5 +1,7 @@
 # src/services/providers/custom_provider.py
 import asyncio
+import aiohttp
+import json
 from typing import Any, Dict, List
 from openai import AsyncOpenAI
 
@@ -23,6 +25,8 @@ class CustomProvider(BaseLLMProvider):
             api_key=api_key,
             base_url=base_url
         )
+        self.base_url = base_url
+        self.api_key = api_key
         self.semaphore = asyncio.Semaphore(max_concurrency)
 
     async def completions(
@@ -81,6 +85,35 @@ class CustomProvider(BaseLLMProvider):
                 **kwargs
             )
 
+    async def generate_image_gemini(self, prompt: str):
+        """
+        Gemini 生成图像（携程异步版本）
+
+        """
+        base_url = self.base_url.replace("/v1",'')
+        url = f"{base_url}/v1beta/models/gemini-3-pro-image-preview:generateContent?key={self.api_key}"
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}]
+                }
+            ],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"]
+            }
+        }
+
+        async with self.semaphore:  # 控制最大并发
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                        url,
+                        json=payload,
+                        headers={"Content-Type": "application/json"}
+                ) as resp:
+                    result = await resp.text()
+                    return json.loads(result)
+
 
 if __name__ == "__main__":
     import asyncio
@@ -89,9 +122,15 @@ if __name__ == "__main__":
     async def test():
         # provider = CustomProvider(api_key="sk-ibB9WqeYysBiJnjy8eF2B7290bEf409c8d92476c9086BeEa",
         #                           base_url="https://jyapi.ai-wx.cn/v1")
-        provider = CustomProvider(api_key="sk-mrv4RQpMacJiNpA7T5h1yu8KAfkEdoPVvMOf1QM7ctDxEuGi",
+
+        # provider = CustomProvider(api_key="sk-mrv4RQpMacJiNpA7T5h1yu8KAfkEdoPVvMOf1QM7ctDxEuGi",
+        #                           base_url="https://api.vectorengine.ai/v1")
+        # response = await provider.generate_image("A beautiful sunset over the mountains", model="sora_image")
+        # print(response)
+
+        provider = CustomProvider(api_key="sk-xrVNL5PZvNcpMzwsnyaJZ19nbExkdDRuPXwkI48WyE299Vft",
                                   base_url="https://api.vectorengine.ai/v1")
-        response = await provider.generate_image("A beautiful sunset over the mountains", model="sora_image")
+        response = await provider.generate_image_gemini("范慎面部特写，惊骇呆滞的表情，瞳孔放大，冷汗从额头滑落，背景是庆国皇宫大殿阴影处，烛光摇曳形成强烈明暗对比，粗犷水墨线条勾勒人物轮廓，烽火台狼烟在窗外隐约可见，画面充满压抑的动荡感，细节呈现衣袍褶皱与面部肌肉紧绷状态")
         print(response)
 
 
