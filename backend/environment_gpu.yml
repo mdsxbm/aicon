@@ -1,0 +1,16 @@
+name: aicon-gpu
+channels:
+  - pytorch         # 确保 PyTorch 及其 CUDA 相关依赖能被找到
+  - nvidia          # 官方 NVIDIA Conda channel
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pytorch         # 安装 PyTorch
+  - torchaudio
+  - torchvision
+  - pytorch-cuda=11.8  # 明确安装 CUDA 11.8 版本的 PyTorch 依赖
+  - pip:
+    - faster-whisper
+    - uv

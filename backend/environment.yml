@@ -1,0 +1,9 @@
+name: aicon-gpu
+channels:
+  - defaults
+dependencies:
+  - python=3.11  # 使用一个稳定的 Python 版本
+  - pip
+  - pip:
+    - faster-whisper  # 使用 pip 安装 Faster-Whisper
+    - uv              # 安装 uv 工具
