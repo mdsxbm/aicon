@@ -103,17 +103,17 @@ class VideoTask(BaseModel):
 
     @staticmethod
     def _get_default_gen_setting() -> Dict:
-        """获取默认生成设置"""
+        """获取默认生成设置（4:3横屏）"""
         return {
-            "resolution": "1920x1080",
-            "fps": 25,
+            "resolution": "1440x1080",  # 4:3横屏
+            "fps": 30,
             "video_codec": "libx264",
             "audio_codec": "aac",
             "audio_bitrate": "192k",
             "zoom_speed": 0.0005,
             "subtitle_style": {
                 "font": "Arial",
-                "font_size": 48,
+                "font_size": 70,  # 漫画解说标准字号
                 "color": "white",
                 "position": "bottom"
             }

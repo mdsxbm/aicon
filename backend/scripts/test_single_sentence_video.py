@@ -64,17 +64,17 @@ async def test_single_sentence(sentence_id: str):
             temp_dir = Path(tempfile.mkdtemp(prefix="test_video_"))
             logger.info(f"临时目录: {temp_dir}")
             
-            # 默认生成设置
+            # 4:3横屏设置
             gen_setting = {
-                "resolution": "1920x1080",
-                "fps": 25,
+                "resolution": "1440x1080",  # 4:3横屏
+                "fps": 30,
                 "video_codec": "libx264",
                 "audio_codec": "aac",
                 "audio_bitrate": "192k",
                 "zoom_speed": 0.0005,
                 "subtitle_style": {
                     "font": "Arial",
-                    "font_size": 48,
+                    "font_size": 70,  # 漫画解说标准
                     "color": "white",
                     "position": "bottom"
                 }

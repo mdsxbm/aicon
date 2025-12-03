@@ -155,13 +155,61 @@ class VideoSynthesisService(SessionManagedService):
             logger.error(f"生成字幕时间轴失败: {e}")
             raise
 
+    def _split_text_into_lines(self, text: str, max_chars: int = 18) -> list:
+        """
+        智能分割文本为双行字幕（漫画解说标准）
+        
+        Args:
+            text: 要分割的文本
+            max_chars: 每行最大字符数（推荐15-20字）
+            
+        Returns:
+            分割后的行列表（最多2行，不含标点）
+        """
+        import re
+        
+        # 移除所有标点符号
+        punctuation_pattern = r'[，。！？；、,\.!?;]'
+        clean_text = re.sub(punctuation_pattern, '', text).strip()
+        
+        if not clean_text:
+            return []
+        
+        # 如果文本很短，直接返回单行
+        if len(clean_text) <= max_chars:
+            return [clean_text]
+        
+        # 分成两行（漫画解说标准）
+        # 尽量在中间位置分割
+        mid_point = len(clean_text) // 2
+        
+        # 在中间点附近找最佳分割位置
+        best_split = mid_point
+        for i in range(max(mid_point - 5, 0), min(mid_point + 5, len(clean_text))):
+            if i > 0 and i < len(clean_text):
+                best_split = i
+                break
+        
+        line1 = clean_text[:best_split].strip()
+        line2 = clean_text[best_split:].strip()
+        
+        # 如果第二行太长，截断
+        if len(line2) > max_chars:
+            line2 = line2[:max_chars]
+        
+        # 如果第一行太长，调整
+        if len(line1) > max_chars:
+            line1 = line1[:max_chars]
+        
+        return [line1, line2] if line2 else [line1]
+
     def _create_subtitle_filter(
             self,
             subtitle_data: dict,
             gen_setting: dict
     ) -> str:
         """
-        创建字幕滤镜（打字机效果 - 逐字累积显示）
+        创建漫画解说字幕滤镜（固定位置，专业样式）
 
         Args:
             subtitle_data: 字幕数据
@@ -172,99 +220,168 @@ class VideoSynthesisService(SessionManagedService):
         """
         try:
             subtitle_style = gen_setting.get("subtitle_style", {})
-            font_size = subtitle_style.get("font_size", 72)
+            font_size = subtitle_style.get("font_size", 70)  # 适中字号
             color = subtitle_style.get("color", "white")
-            position = subtitle_style.get("position", "bottom")
 
-            # 计算Y坐标
-            if position == "bottom":
-                y_pos = "h-th-80"
-            elif position == "top":
-                y_pos = "80"
-            else:
-                y_pos = "(h-th)/2"
-
-            # 构建drawtext滤镜 - 打字机效果
+            # 固定位置：画面下方
+            # 4:3横屏（1080px高度）：字幕固定在y=900
+            fixed_y_pos = 900
+            
+            # 标点符号正则
+            import re
+            punctuation_pattern = r'[，。！？；、,\.!?;:\'"\(\)\[\]\{\}<>]'
+            
             filters = []
             segments = subtitle_data.get("segments", [])
 
             for segment in segments:
                 words = segment.get("words", [])
                 
-                # 如果有词级时间轴，实现打字机效果
                 if words:
-                    accumulated_text = ""
+                    # 使用词级时间轴构建字幕行
+                    current_line_words = []
+                    current_line_len = 0
                     
-                    for idx, word_info in enumerate(words):
-                        word = word_info.get("word", "").strip()
-                        if not word:
+                    for w in words:
+                        raw_word = w.get("word", "")
+                        # 移除标点，但保留文字
+                        clean_word = re.sub(punctuation_pattern, '', raw_word).strip()
+                        
+                        if not clean_word:
                             continue
+                            
+                        word_len = len(clean_word)
                         
-                        # 累积文本
-                        accumulated_text += word
+                        # 如果加上这个词会超过最大长度（18字），则先输出当前行
+                        if current_line_len + word_len > 18 and current_line_words:
+                            # 生成当前行的滤镜
+                            line_text = "".join([x["text"] for x in current_line_words])
+                            start_time = current_line_words[0]["start"]
+                            end_time = current_line_words[-1]["end"]
+                            
+                            # 转义特殊字符
+                            text_escaped = line_text.replace("'", "'\\\\\\''").replace(":", "\\:")
+                            
+                            filter_str = (
+                                f"drawtext="
+                                f"text='{text_escaped}':"
+                                f"fontsize={font_size}:"
+                                f"fontcolor={color}:"
+                                f"borderw=5:"
+                                f"bordercolor=black:"
+                                f"shadowcolor=black@0.7:"
+                                f"shadowx=4:"
+                                f"shadowy=4:"
+                                f"box=1:"
+                                f"boxcolor=black@0.65:"
+                                f"boxborderw=20:"
+                                f"x=(w-text_w)/2:"
+                                f"y={fixed_y_pos}:"
+                                f"enable='between(t,{start_time:.3f},{end_time:.3f})'"
+                            )
+                            filters.append(filter_str)
+                            
+                            # 重置行
+                            current_line_words = []
+                            current_line_len = 0
                         
-                        start = word_info.get("start", 0)
-                        # 结束时间是下一个词的开始时间，或者segment的结束时间
-                        if idx < len(words) - 1:
-                            end = words[idx + 1].get("start", word_info.get("end", 0))
-                        else:
-                            end = segment.get("end", word_info.get("end", 0))
+                        # 添加词到当前行
+                        current_line_words.append({
+                            "text": clean_word,
+                            "start": w.get("start", 0),
+                            "end": w.get("end", 0)
+                        })
+                        current_line_len += word_len
+                    
+                    # 处理最后一行
+                    if current_line_words:
+                        line_text = "".join([x["text"] for x in current_line_words])
+                        start_time = current_line_words[0]["start"]
+                        end_time = current_line_words[-1]["end"]
                         
-                        # 转义特殊字符
-                        text_escaped = accumulated_text.replace("'", "'\\\\\\''").replace(":", "\\:")
+                        text_escaped = line_text.replace("'", "'\\\\\\''").replace(":", "\\:")
                         
-                        # 创建drawtext滤镜 - 显示累积的文本
                         filter_str = (
                             f"drawtext="
                             f"text='{text_escaped}':"
                             f"fontsize={font_size}:"
                             f"fontcolor={color}:"
-                            f"borderw=3:"
+                            f"borderw=5:"
                             f"bordercolor=black:"
+                            f"shadowcolor=black@0.7:"
+                            f"shadowx=4:"
+                            f"shadowy=4:"
                             f"box=1:"
-                            f"boxcolor=black@0.5:"
-                            f"boxborderw=10:"
+                            f"boxcolor=black@0.65:"
+                            f"boxborderw=20:"
                             f"x=(w-text_w)/2:"
-                            f"y={y_pos}:"
-                            f"enable='between(t,{start},{end})'"
+                            f"y={fixed_y_pos}:"
+                            f"enable='between(t,{start_time:.3f},{end_time:.3f})'"
                         )
                         filters.append(filter_str)
+                        
                 else:
-                    # 如果没有词级时间轴，显示整句
+                    # 没有词级时间轴，使用比例计算时间（回退方案）
                     text = segment.get("text", "").strip()
-                    if not text:
+                    # 移除标点
+                    clean_text = re.sub(punctuation_pattern, '', text).strip()
+                    
+                    if not clean_text:
                         continue
                     
-                    start = segment.get("start", 0)
-                    end = segment.get("end", 0)
+                    # 智能分割
+                    lines = self._split_text_into_lines(clean_text, max_chars=18)
                     
-                    text_escaped = text.replace("'", "'\\\\\\''").replace(":", "\\:")
+                    segment_start = segment.get("start", 0)
+                    segment_end = segment.get("end", 0)
+                    total_duration = segment_end - segment_start
+                    total_length = len(clean_text.replace(" ", ""))
                     
-                    filter_str = (
-                        f"drawtext="
-                        f"text='{text_escaped}':"
-                        f"fontsize={font_size}:"
-                        f"fontcolor={color}:"
-                        f"borderw=3:"
-                        f"bordercolor=black:"
-                        f"box=1:"
-                        f"boxcolor=black@0.5:"
-                        f"boxborderw=10:"
-                        f"x=(w-text_w)/2:"
-                        f"y={y_pos}:"
-                        f"enable='between(t,{start},{end})'"
-                    )
-                    filters.append(filter_str)
+                    current_start = segment_start
+                    
+                    for line_text in lines:
+                        if not line_text.strip():
+                            continue
+                        
+                        # 按长度比例计算持续时间
+                        line_len = len(line_text)
+                        if total_length > 0:
+                            line_duration = total_duration * (line_len / total_length)
+                        else:
+                            line_duration = total_duration / len(lines)
+                            
+                        line_end = current_start + line_duration
+                        
+                        text_escaped = line_text.replace("'", "'\\\\\\''").replace(":", "\\:")
+                        
+                        filter_str = (
+                            f"drawtext="
+                            f"text='{text_escaped}':"
+                            f"fontsize={font_size}:"
+                            f"fontcolor={color}:"
+                            f"borderw=5:"
+                            f"bordercolor=black:"
+                            f"shadowcolor=black@0.7:"
+                            f"shadowx=4:"
+                            f"shadowy=4:"
+                            f"box=1:"
+                            f"boxcolor=black@0.65:"
+                            f"boxborderw=20:"
+                            f"x=(w-text_w)/2:"
+                            f"y={fixed_y_pos}:"
+                            f"enable='between(t,{current_start:.3f},{line_end:.3f})'"
+                        )
+                        filters.append(filter_str)
+                        
+                        current_start = line_end
 
-            # 如果没有字幕，返回空滤镜
             if not filters:
                 return ""
 
-            # 连接所有滤镜
             return ",".join(filters)
 
         except Exception as e:
-            logger.error(f"创建字幕滤镜失败: {e}")
+            logger.error(f"创建字幕滤镜失败: {e}", exc_info=True)
             return ""
 
     async def _synthesize_sentence_video(

@@ -144,7 +144,7 @@ def build_sentence_video_command(
         gen_setting: dict
 ) -> List[str]:
     """
-    构建单句视频合成命令
+    构建单句视频合成命令（电影级效果）
 
     Args:
         image_path: 图片路径
@@ -162,30 +162,41 @@ def build_sentence_video_command(
         raise ValueError(f"无法获取音频时长: {audio_path}")
 
     # 解析设置
-    resolution = gen_setting.get("resolution", "1920x1080")
-    fps = gen_setting.get("fps", 25)
+    resolution = gen_setting.get("resolution", "1440x1080")  # 默认4:3横屏
+    fps = gen_setting.get("fps", 30)  # 提高到30fps更流畅
     video_codec = gen_setting.get("video_codec", "libx264")
     audio_codec = gen_setting.get("audio_codec", "aac")
     audio_bitrate = gen_setting.get("audio_bitrate", "192k")
-    zoom_speed = gen_setting.get("zoom_speed", 0.0003)  # 减慢缩放速度
 
     # 解析分辨率
     width, height = resolution.split('x')
-
-    # 构建filter_complex
-    # 1. 图片缩放 - 使用decrease保持完整图片，添加黑边
-    # 2. 轻微的Ken Burns效果（缩放）
-    # 3. 字幕叠加
     
     # 计算总帧数
     total_frames = int(fps * duration)
+
+    # 增强的Ken Burns效果：
+    # 1. 缩放：从1.0逐渐放大到1.15（更明显的缩放）
+    # 2. 平移：从左上角移动到右下角（增加动感）
+    # 3. 使用easing函数让动画更自然
+    
+    # zoompan参数：
+    # z: 缩放因子，使用pzoom（前一帧的zoom）+ 增量
+    # x, y: 平移坐标
+    # d: 持续帧数
+    # s: 输出尺寸
     
     if subtitle_filter:
         # 有字幕时的滤镜链
         filter_complex = (
             f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,"
-            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,"  # 添加黑边居中
-            f"zoompan=z='min(zoom+{zoom_speed},1.2)':d={total_frames}:s={width}x{height}:fps={fps}[bg];"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,"
+            f"zoompan="
+            f"z='min(1+0.00015*on,1.15)':"  # 缩放从1.0到1.15
+            f"x='iw/2-(iw/zoom/2)-{int(width)*0.05}*on/{total_frames}':"  # 从左向右平移
+            f"y='ih/2-(ih/zoom/2)-{int(height)*0.05}*on/{total_frames}':"  # 从上向下平移
+            f"d={total_frames}:"
+            f"s={width}x{height}:"
+            f"fps={fps}[bg];"
             f"[bg]{subtitle_filter}[v]"
         )
         map_video = "[v]"
@@ -194,28 +205,37 @@ def build_sentence_video_command(
         filter_complex = (
             f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,"
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,"
-            f"zoompan=z='min(zoom+{zoom_speed},1.2)':d={total_frames}:s={width}x{height}:fps={fps}[v]"
+            f"zoompan="
+            f"z='min(1+0.00015*on,1.15)':"
+            f"x='iw/2-(iw/zoom/2)-{int(width)*0.05}*on/{total_frames}':"
+            f"y='ih/2-(ih/zoom/2)-{int(height)*0.05}*on/{total_frames}':"
+            f"d={total_frames}:"
+            f"s={width}x{height}:"
+            f"fps={fps}[v]"
         )
         map_video = "[v]"
 
     # 构建命令
     command = [
         "ffmpeg",
-        "-y",  # 覆盖输出文件
-        "-loop", "1",  # 循环图片
+        "-y",
+        "-loop", "1",
         "-framerate", str(fps),
-        "-i", image_path,  # 输入图片
-        "-i", audio_path,  # 输入音频
+        "-i", image_path,
+        "-i", audio_path,
         "-filter_complex", filter_complex,
-        "-map", map_video,  # 映射视频流
-        "-map", "1:a",  # 映射音频流
-        "-c:v", video_codec,  # 视频编码器
-        "-preset", "medium",  # 使用medium预设提高质量
-        "-crf", "23",  # 质量控制
-        "-c:a", audio_codec,  # 音频编码器
-        "-b:a", audio_bitrate,  # 音频比特率
-        "-pix_fmt", "yuv420p",  # 像素格式
-        "-shortest",  # 以最短流为准
+        "-map", map_video,
+        "-map", "1:a",
+        "-c:v", video_codec,
+        "-preset", "slow",  # 使用slow预设获得最佳质量
+        "-crf", "20",  # 提高质量（更低的CRF值）
+        "-profile:v", "high",  # 使用high profile
+        "-level", "4.2",
+        "-c:a", audio_codec,
+        "-b:a", audio_bitrate,
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",  # 优化网络播放
+        "-shortest",
         output_path
     ]
 
