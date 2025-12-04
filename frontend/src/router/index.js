@@ -11,7 +11,7 @@ const Register = () => import('@/views/Register.vue')
 const Dashboard = () => import('@/views/Dashboard.vue')
 const Projects = () => import('@/views/Projects.vue')
 const ProjectDetail = () => import('@/components/project/ProjectDetail.vue')
-const GenerationQueue = () => import('@/views/GenerationQueue.vue')
+// const GenerationQueue = () => import('@/views/GenerationQueue.vue')
 const GenerationSettings = () => import('@/views/GenerationSettings.vue')
 const Publish = () => import('@/views/Publish.vue')
 const APIKeys = () => import('@/views/APIKeys.vue')
@@ -94,7 +94,7 @@ const routes = [
         props: true
       },
       {
-        path: ':projectId/director',  // 添加这个路由
+        path: ':projectId/director',
         name: 'DirectorEngine',
         component: () => import('@/views/studio/DirectorEngine.vue'),
         props: true
@@ -110,7 +110,7 @@ const routes = [
       {
         path: '',
         name: 'GenerationPage',
-        component: GenerationQueue
+        component: () => import('@/views/VideoTasks.vue')
       }
     ]
   },

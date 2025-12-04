@@ -270,6 +270,33 @@ def generate_audio(self, api_key_id: str, sentences_ids: list[str], voice: str =
     logger.info(f"Celery任务成功: generate_audio (sentences_ids={sentences_ids})")
     return result
 
+@celery_app.task(
+    bind=True,
+    max_retries=1,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    name="generate.synthesize_video"
+)
+def synthesize_video(self, video_task_id: str):
+    """
+    视频合成的 Celery 任务
+
+    该任务仅负责调用服务层的视频合成逻辑，不包含业务逻辑。
+
+    Args:
+        video_task_id: 视频任务ID
+
+    Returns:
+        Dict[str, Any]: 合成结果，包含统计信息
+    """
+    from src.services.video_synthesis import video_synthesis_service
+
+    logger.info(f"Celery任务开始: synthesize_video (video_task_id={video_task_id})")
+    result = run_async_task(video_synthesis_service.synthesize_video(video_task_id))
+    logger.info(f"Celery任务成功: synthesize_video (video_task_id={video_task_id})")
+    return result
+
 
 # ---------------------------
 # 导出的任务列表
@@ -280,6 +307,8 @@ __all__ = [
     'process_uploaded_file',
     'retry_failed_project',
     'generate_prompts',
+    'generate_prompts_by_ids',
     'generate_images',
-    'generate_audio'
+    'generate_audio',
+    'synthesize_video',  # 新增
 ]

@@ -12,6 +12,7 @@
 - 异常处理遵循统一策略
 - 方法职责单一，保持简洁
 """
+
 from datetime import timedelta
 from typing import List, Optional, Tuple
 
@@ -31,29 +32,6 @@ from src.services.chapter_content_parser import chapter_content_parser
 logger = get_logger(__name__)
 
 
-def _attach_media_url(sentence: Sentence):
-    """
-    为句子的媒体URL添加完整的访问域名
-
-    Args:
-        sentence: 句子对象
-
-    Returns:
-        处理后的句子对象
-    """
-    from src.utils.storage import storage_client
-
-    if sentence.image_url and not sentence.image_url.startswith("http"):
-        # 使用预签名URL获取可访问的完整URL
-        sentence.image_url = storage_client.get_presigned_url(sentence.image_url, timedelta(hours=6))
-
-    if sentence.audio_url and not sentence.audio_url.startswith("http"):
-        # 使用预签名URL获取可访问的完整URL
-        sentence.audio_url = storage_client.get_presigned_url(sentence.audio_url, timedelta(hours=6))
-
-    return sentence
-
-
 class ChapterService(BaseService):
     """
     章节管理服务
@@ -71,14 +49,12 @@ class ChapterService(BaseService):
                        在后台任务中可以不提供，让服务自己管理会话
         """
         super().__init__(db_session)
-        logger.debug(f"ChapterService 初始化完成，会话管理: {'外部注入' if db_session else '自管理'}")
+        logger.debug(
+            f"ChapterService 初始化完成，会话管理: {'外部注入' if db_session else '自管理'}"
+        )
 
     async def create_chapter(
-            self,
-            project_id: str,
-            title: str,
-            content: str,
-            chapter_number: int
+        self, project_id: str, title: str, content: str, chapter_number: int
     ) -> Chapter:
         """
         创建新章节
@@ -104,22 +80,21 @@ class ChapterService(BaseService):
             project = await self.get(Project, project_id)
             if not project:
                 raise NotFoundError(
-                    "项目不存在",
-                    resource_type="project",
-                    resource_id=project_id
+                    "项目不存在", resource_type="project", resource_id=project_id
                 )
 
             # 检查章节序号是否已存在
-            existing_chapter = await self.get_chapter_by_number(project_id, chapter_number)
+            existing_chapter = await self.get_chapter_by_number(
+                project_id, chapter_number
+            )
             if existing_chapter:
-                raise BusinessLogicError(
-                    f"章节序号 {chapter_number} 已存在"
-                )
+                raise BusinessLogicError(f"章节序号 {chapter_number} 已存在")
 
             # 使用内容解析服务重新计算统计信息并生成段落句子结构
-            stats, paragraphs_data, sentences_data = await chapter_content_parser.parse_content_with_structure(
-                chapter_id=None,  # 临时ID，创建章节后会更新
-                content=content
+            stats, paragraphs_data, sentences_data = (
+                await chapter_content_parser.parse_content_with_structure(
+                    chapter_id=None, content=content  # 临时ID，创建章节后会更新
+                )
             )
             word_count = stats["word_count"]
             paragraph_count = stats["paragraph_count"]
@@ -134,7 +109,7 @@ class ChapterService(BaseService):
                 word_count=word_count,
                 paragraph_count=paragraph_count,
                 sentence_count=sentence_count,
-                status=ModelChapterStatus.PENDING
+                status=ModelChapterStatus.PENDING,
             )
 
             await self.add(chapter)
@@ -146,8 +121,11 @@ class ChapterService(BaseService):
                     paragraph_data["chapter_id"] = chapter.id
 
                 # 批量创建段落
-                paragraph_ids = await Paragraph.batch_create(self.db_session, paragraphs_data,
-                                                             [chapter.id] * len(paragraphs_data))
+                paragraph_ids = await Paragraph.batch_create(
+                    self.db_session,
+                    paragraphs_data,
+                    [chapter.id] * len(paragraphs_data),
+                )
 
                 # 创建句子并关联段落ID
                 if sentences_data and paragraph_ids:
@@ -158,10 +136,14 @@ class ChapterService(BaseService):
                             break
 
                         # 获取当前段落的句子数量
-                        para_sentence_count = paragraphs_data[para_idx]["sentence_count"]
+                        para_sentence_count = paragraphs_data[para_idx][
+                            "sentence_count"
+                        ]
 
                         # 获取对应的句子数据
-                        para_sentences_data = sentences_data[sentence_idx:sentence_idx + para_sentence_count]
+                        para_sentences_data = sentences_data[
+                            sentence_idx : sentence_idx + para_sentence_count
+                        ]
 
                         # 设置句子的段落ID
                         for sentence_data in para_sentences_data:
@@ -169,8 +151,11 @@ class ChapterService(BaseService):
 
                         # 批量创建当前段落的句子
                         if para_sentences_data:
-                            await Sentence.batch_create(self.db_session, para_sentences_data,
-                                                        [paragraph_id] * len(para_sentences_data))
+                            await Sentence.batch_create(
+                                self.db_session,
+                                para_sentences_data,
+                                [paragraph_id] * len(para_sentences_data),
+                            )
 
                         sentence_idx += para_sentence_count
 
@@ -178,7 +163,9 @@ class ChapterService(BaseService):
             await self.commit()
             await self.refresh(chapter)  # 确保获取最新数据
 
-            logger.info(f"创建章节成功: ID={chapter.id}, 标题={title}, 项目={project_id}")
+            logger.info(
+                f"创建章节成功: ID={chapter.id}, 标题={title}, 项目={project_id}"
+            )
             return chapter
 
         except Exception:
@@ -186,9 +173,7 @@ class ChapterService(BaseService):
             raise  # 重新抛出异常，由中间件处理
 
     async def get_chapter_by_id(
-            self,
-            chapter_id: str,
-            project_id: Optional[str] = None
+        self, chapter_id: str, project_id: Optional[str] = None
     ) -> Chapter:
         """
         根据ID获取章节
@@ -216,18 +201,14 @@ class ChapterService(BaseService):
         if not chapter:
             error_message = f"章节不存在或无权限访问" if project_id else "章节不存在"
             raise NotFoundError(
-                error_message,
-                resource_type="chapter",
-                resource_id=chapter_id
+                error_message, resource_type="chapter", resource_id=chapter_id
             )
 
         logger.debug(f"获取章节成功: ID={chapter_id}, 标题={chapter.title}")
         return chapter
 
     async def get_chapter_by_number(
-            self,
-            project_id: str,
-            chapter_number: int
+        self, project_id: str, chapter_number: int
     ) -> Optional[Chapter]:
         """
         根据项目ID和章节序号获取章节
@@ -240,23 +221,22 @@ class ChapterService(BaseService):
             Chapter: 查询到的章节对象，如果不存在则返回None
         """
         query = select(Chapter).filter(
-            Chapter.project_id == project_id,
-            Chapter.chapter_number == chapter_number
+            Chapter.project_id == project_id, Chapter.chapter_number == chapter_number
         )
 
         result = await self.execute(query)
         return result.scalar_one_or_none()
 
     async def get_project_chapters(
-            self,
-            project_id: str,
-            page: int = 1,
-            size: int = 20,
-            status: Optional[ModelChapterStatus] = None,
-            is_confirmed: Optional[bool] = None,
-            search: Optional[str] = None,
-            sort_by: str = "chapter_number",
-            sort_order: str = "asc"
+        self,
+        project_id: Optional[str],
+        page: int = 1,
+        size: int = 20,
+        status: Optional[ModelChapterStatus] = None,
+        is_confirmed: Optional[bool] = None,
+        search: Optional[str] = None,
+        sort_by: str = "chapter_number",
+        sort_order: str = "asc",
     ) -> Tuple[List[Chapter], int]:
         """
         获取项目的章节列表（分页）
@@ -264,7 +244,7 @@ class ChapterService(BaseService):
         支持多种过滤条件、搜索和排序方式，返回分页结果。
 
         Args:
-            project_id: 项目ID，必填
+            project_id: 项目ID，可选。如果不传则查询所有项目的章节
             page: 页码，从1开始，默认1
             size: 每页大小，默认20，最大100
             status: 章节状态过滤，可选
@@ -287,7 +267,10 @@ class ChapterService(BaseService):
             size = min(max(size, 1), 100)
 
         # 构建基础查询
-        query = select(Chapter).filter(Chapter.project_id == project_id)
+        query = select(Chapter)
+        
+        if project_id:
+            query = query.filter(Chapter.project_id == project_id)
 
         # 状态过滤
         if status:
@@ -302,13 +285,16 @@ class ChapterService(BaseService):
             search_term = f"%{search}%"
             query = query.filter(
                 or_(
-                    Chapter.title.ilike(search_term),
-                    Chapter.content.ilike(search_term)
+                    Chapter.title.ilike(search_term), Chapter.content.ilike(search_term)
                 )
             )
 
         # 获取总数的查询（复用过滤条件）
-        count_query = select(func.count(Chapter.id)).filter(Chapter.project_id == project_id)
+        count_query = select(func.count(Chapter.id))
+        
+        if project_id:
+            count_query = count_query.filter(Chapter.project_id == project_id)
+            
         if status:
             count_query = count_query.filter(Chapter.status == status.value)
         if is_confirmed is not None:
@@ -317,8 +303,7 @@ class ChapterService(BaseService):
             search_term = f"%{search}%"
             count_query = count_query.filter(
                 or_(
-                    Chapter.title.ilike(search_term),
-                    Chapter.content.ilike(search_term)
+                    Chapter.title.ilike(search_term), Chapter.content.ilike(search_term)
                 )
             )
 
@@ -345,14 +330,13 @@ class ChapterService(BaseService):
         result = await self.execute(query)
         chapters = result.scalars().all()
 
-        logger.debug(f"查询章节列表: 项目={project_id}, 总数={total}, 当前页={page}, 数量={len(chapters)}")
+        logger.debug(
+            f"查询章节列表: 项目={project_id}, 总数={total}, 当前页={page}, 数量={len(chapters)}"
+        )
         return list(chapters), total
 
     async def update_chapter(
-            self,
-            chapter_id: str,
-            project_id: str,
-            **updates
+        self, chapter_id: str, project_id: str, **updates
     ) -> Chapter:
         """
         更新章节信息
@@ -373,11 +357,12 @@ class ChapterService(BaseService):
                 setattr(chapter, field, value)
 
         # 如果更新了内容，使用内容解析服务重新计算统计信息并更新段落句子结构
-        if 'content' in updates and updates['content'] and not chapter.is_confirmed:
-            content = updates['content']
-            stats, paragraphs_data, sentences_data = await chapter_content_parser.parse_content_with_structure(
-                chapter_id=chapter.id,
-                content=content
+        if "content" in updates and updates["content"] and not chapter.is_confirmed:
+            content = updates["content"]
+            stats, paragraphs_data, sentences_data = (
+                await chapter_content_parser.parse_content_with_structure(
+                    chapter_id=chapter.id, content=content
+                )
             )
             chapter.word_count = stats["word_count"]
             chapter.paragraph_count = stats["paragraph_count"]
@@ -398,8 +383,11 @@ class ChapterService(BaseService):
             # 创建新的段落和句子
             if paragraphs_data:
                 # 批量创建段落
-                paragraph_ids = await Paragraph.batch_create(self.db_session, paragraphs_data,
-                                                             [chapter.id] * len(paragraphs_data))
+                paragraph_ids = await Paragraph.batch_create(
+                    self.db_session,
+                    paragraphs_data,
+                    [chapter.id] * len(paragraphs_data),
+                )
 
                 # 创建句子并关联段落ID
                 if sentences_data and paragraph_ids:
@@ -410,10 +398,14 @@ class ChapterService(BaseService):
                             break
 
                         # 获取当前段落的句子数量
-                        para_sentence_count = paragraphs_data[para_idx]["sentence_count"]
+                        para_sentence_count = paragraphs_data[para_idx][
+                            "sentence_count"
+                        ]
 
                         # 获取对应的句子数据
-                        para_sentences_data = sentences_data[sentence_idx:sentence_idx + para_sentence_count]
+                        para_sentences_data = sentences_data[
+                            sentence_idx : sentence_idx + para_sentence_count
+                        ]
 
                         # 设置句子的段落ID
                         for sentence_data in para_sentences_data:
@@ -421,8 +413,11 @@ class ChapterService(BaseService):
 
                         # 批量创建当前段落的句子
                         if para_sentences_data:
-                            await Sentence.batch_create(self.db_session, para_sentences_data,
-                                                        [paragraph_id] * len(para_sentences_data))
+                            await Sentence.batch_create(
+                                self.db_session,
+                                para_sentences_data,
+                                [paragraph_id] * len(para_sentences_data),
+                            )
 
                         sentence_idx += para_sentence_count
 
@@ -432,11 +427,7 @@ class ChapterService(BaseService):
         logger.info(f"更新章节成功: ID={chapter_id}, 更新字段={list(updates.keys())}")
         return chapter
 
-    async def confirm_chapter(
-            self,
-            chapter_id: str,
-            project_id: str
-    ) -> Chapter:
+    async def confirm_chapter(self, chapter_id: str, project_id: str) -> Chapter:
         """
         确认章节
 
@@ -466,11 +457,7 @@ class ChapterService(BaseService):
         logger.info(f"确认章节成功: ID={chapter_id}, 标题={chapter.title}")
         return chapter
 
-    async def delete_chapter(
-            self,
-            chapter_id: str,
-            project_id: str
-    ) -> bool:
+    async def delete_chapter(self, chapter_id: str, project_id: str) -> bool:
         """
         删除章节及其所有相关的段落和句子
 
@@ -485,9 +472,7 @@ class ChapterService(BaseService):
 
         # 检查是否已确认（已确认的章节不能删除）
         if chapter.is_confirmed:
-            raise BusinessLogicError(
-                "已确认的章节不能删除"
-            )
+            raise BusinessLogicError("已确认的章节不能删除")
 
         # 先统计要删除的段落和句子数量（用于日志记录）
         from src.models.paragraph import Paragraph
@@ -502,30 +487,34 @@ class ChapterService(BaseService):
 
         # 统计句子数量
         sentence_count_result = await self.execute(
-            select(func.count(Sentence.id)).where(Sentence.paragraph_id.in_(
-                select(Paragraph.id).where(Paragraph.chapter_id == chapter_id)
-            ))
+            select(func.count(Sentence.id)).where(
+                Sentence.paragraph_id.in_(
+                    select(Paragraph.id).where(Paragraph.chapter_id == chapter_id)
+                )
+            )
         )
         sentence_count = sentence_count_result.scalar() or 0
 
         logger.info(
-            f"开始删除章节: ID={chapter_id}, 标题={chapter.title}, 将删除 {paragraph_count} 个段落, {sentence_count} 个句子")
+            f"开始删除章节: ID={chapter_id}, 标题={chapter.title}, 将删除 {paragraph_count} 个段落, {sentence_count} 个句子"
+        )
 
         # 删除章节（会级联删除所有段落和句子）
         await self.delete(chapter)
         await self.commit()
 
         logger.info(
-            f"删除章节成功: ID={chapter_id}, 标题={chapter.title}, 已删除 {paragraph_count} 个段落, {sentence_count} 个句子")
+            f"删除章节成功: ID={chapter_id}, 标题={chapter.title}, 已删除 {paragraph_count} 个段落, {sentence_count} 个句子"
+        )
         return True
 
     async def get_sentences(
-            self,
-            chapter_id: str,
-            status: SentenceStatus = None,
-            has_prompt: Optional[bool] = None,
-            has_image: Optional[bool] = None,
-            has_audio: Optional[bool] = None
+        self,
+        chapter_id: str,
+        status: SentenceStatus = None,
+        has_prompt: Optional[bool] = None,
+        has_image: Optional[bool] = None,
+        has_audio: Optional[bool] = None,
     ) -> List[Sentence]:
         """
         获取章节的所有句子（一次性加载，用于导演引擎）
@@ -542,14 +531,20 @@ class ChapterService(BaseService):
         """
         # 使用 JOIN 一次性查询所有句子，避免 N+1 问题
         from sqlalchemy.orm import joinedload
+
         stmt = (
             select(Sentence)
             .join(Paragraph, Sentence.paragraph_id == Paragraph.id)
             .join(Chapter, Paragraph.chapter_id == Chapter.id)
             .join(Project, Chapter.project_id == Project.id)
             .where(Paragraph.chapter_id == chapter_id)
-            .options(joinedload(Sentence.paragraph).joinedload(Paragraph.chapter).joinedload(Chapter.project))
-            .order_by(Paragraph.order_index).order_by(Sentence.order_index)
+            .options(
+                joinedload(Sentence.paragraph)
+                .joinedload(Paragraph.chapter)
+                .joinedload(Chapter.project)
+            )
+            .order_by(Paragraph.order_index)
+            .order_by(Sentence.order_index)
         )
 
         # 如果需要，可以根据章节状态过滤句子（示例中未使用）
@@ -559,31 +554,38 @@ class ChapterService(BaseService):
         # 提示词过滤
         if has_prompt is not None:
             if has_prompt:
-                stmt = stmt.where(Sentence.image_prompt.isnot(None), Sentence.image_prompt != "")
+                stmt = stmt.where(
+                    Sentence.image_prompt.isnot(None), Sentence.image_prompt != ""
+                )
             else:
-                stmt = stmt.where(or_(Sentence.image_prompt.is_(None), Sentence.image_prompt == ""))
+                stmt = stmt.where(
+                    or_(Sentence.image_prompt.is_(None), Sentence.image_prompt == "")
+                )
 
         # 图片过滤
         if has_image is not None:
             if has_image:
-                stmt = stmt.where(Sentence.image_url.isnot(None), Sentence.image_url != "")
+                stmt = stmt.where(
+                    Sentence.image_url.isnot(None), Sentence.image_url != ""
+                )
             else:
-                stmt = stmt.where(or_(Sentence.image_url.is_(None), Sentence.image_url == ""))
+                stmt = stmt.where(
+                    or_(Sentence.image_url.is_(None), Sentence.image_url == "")
+                )
 
         # 音频过滤
         if has_audio is not None:
             if has_audio:
-                stmt = stmt.where(Sentence.audio_url.isnot(None), Sentence.audio_url != "")
+                stmt = stmt.where(
+                    Sentence.audio_url.isnot(None), Sentence.audio_url != ""
+                )
             else:
-                stmt = stmt.where(or_(Sentence.audio_url.is_(None), Sentence.audio_url == ""))
+                stmt = stmt.where(
+                    or_(Sentence.audio_url.is_(None), Sentence.audio_url == "")
+                )
 
         result = await self.execute(stmt)
-        sentences = result.scalars().all()
-
-        # oos的素材要加上域名
-        sentences = [_attach_media_url(sentence) for sentence in sentences]
-
-        return sentences
+        return result.scalars().all()
 
 
 __all__ = [

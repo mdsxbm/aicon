@@ -32,6 +32,7 @@ from .prompt import router as prompt_router
 from .image import router as image_router
 from .audio import router as audio_router
 from .tasks import router as tasks_router
+from .video_tasks import router as video_tasks_router  # 新增
 
 # 注册路由
 api_router.include_router(auth_router, prefix="/auth", tags=["认证"])
@@ -46,5 +47,6 @@ api_router.include_router(prompt_router, prefix="/prompt", tags=["AI导演引擎
 api_router.include_router(image_router, prefix="/image", tags=["图片生成"])
 api_router.include_router(audio_router, prefix="/audio", tags=["音频生成"])
 api_router.include_router(tasks_router, prefix="/tasks", tags=["任务管理"])
+api_router.include_router(video_tasks_router, prefix="/video-tasks", tags=["视频任务"])  # 新增
 
 __all__ = ["api_router"]

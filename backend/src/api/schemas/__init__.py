@@ -1,34 +1,44 @@
 """
-API Schemas Package
-
-这个包包含了所有的Pydantic模型定义，按功能模块组织：
-- base: 基础模型和通用响应
-- auth: 认证相关模型
-- user: 用户管理相关模型
-- project: 项目管理相关模型
-- file: 文件管理相关模型
+API Schemas模块 - 集中导出所有Pydantic模型
 """
 
-# 导入基础模型
-from .base import (
-    MessageResponse,
-    SuccessResponse,
-    PaginatedResponse,
-    ErrorResponse,
-    ValidationErrorResponse,
-)
-
-# 导入认证相关模型
+# 认证相关
 from .auth import (
-    UserRegister,
-    UserLogin,
-    UserResponse,
+    MessageResponse,
     TokenResponse,
     TokenVerifyResponse,
-    MessageResponse as AuthMessageResponse,
+    UserLogin,
+    UserRegister,
     UserResponse,
 )
-from .base import ErrorResponse, PaginatedResponse, SuccessResponse
+
+# 用户相关
+from .user import (
+    AvatarDeleteResponse,
+    AvatarInfoResponse,
+    AvatarUploadResponse,
+    PasswordChangeRequest,
+    PasswordChangeResponse,
+    UserDeleteRequest,
+    UserResponse,
+    UserStatsResponse,
+    UserUpdateRequest,
+)
+
+# 项目相关
+from .project import (
+    ProjectArchiveResponse,
+    ProjectCreate,
+    ProjectDeleteResponse,
+    ProjectListResponse,
+    ProjectProcessingResponse,
+    ProjectResponse,
+    ProjectRetryResponse,
+    ProjectStatusResponse,
+    ProjectUpdate,
+)
+
+# 章节相关
 from .chapter import (
     ChapterConfirmResponse,
     ChapterCreate,
@@ -38,7 +48,8 @@ from .chapter import (
     ChapterStatusResponse,
     ChapterUpdate,
 )
-from .file import FileDeleteResponse, FileResponse, FileUploadResponse
+
+# 段落相关
 from .paragraph import (
     ParagraphBatchUpdate,
     ParagraphBatchUpdateItem,
@@ -48,45 +59,158 @@ from .paragraph import (
     ParagraphResponse,
     ParagraphUpdate,
 )
-from .project import (
-    ProjectCreate,
-    ProjectDeleteResponse,
-    ProjectListResponse,
-    ProjectResponse,
-    ProjectUpdate,
+
+# 句子相关
+from .sentence import (
+    SentenceCreate,
+    SentenceListResponse,
+    SentenceResponse,
+    SentenceUpdate,
 )
-from .user import PasswordChangeRequest, UserStatsResponse, UserUpdateRequest
+
+# 文件相关
+from .file import (
+    FileBatchDeleteResponse,
+    FileCleanupResponse,
+    FileDeleteResponse,
+    FileInfo,
+    FileIntegrityCheckResponse,
+    FileIntegrityCheckResult,
+    FileListResponse,
+    FileResponse,
+    FileStorageUsageResponse,
+    FileType,
+    FileUploadResponse,
+    FileUploadResult,
+)
+
+# API密钥相关
+from .api_key import (
+    APIKeyCreate,
+    APIKeyDeleteResponse,
+    APIKeyListResponse,
+    APIKeyResponse,
+    APIKeyUpdate,
+    APIKeyUsageResponse,
+)
+
+# 任务相关
+from .task import TaskStatusResponse
+
+# 提示词相关
+from .prompt import (
+    PromptGenerateByIdsRequest,
+    PromptGenerateRequest,
+    PromptGenerateResponse,
+)
+
+# 图片相关
+from .image import (
+    ImageGenerateRequest,
+    ImageGenerateResponse,
+)
+
+# 音频相关
+from .audio import (
+    AudioGenerateRequest,
+    AudioGenerateResponse,
+)
+
+# 视频任务相关
+from .video_task import (
+    VideoTaskCreate,
+    VideoTaskDeleteResponse,
+    VideoTaskListResponse,
+    VideoTaskResponse,
+    VideoTaskRetryResponse,
+    VideoTaskStatsResponse,
+)
 
 __all__ = [
-    # Base
-    "SuccessResponse",
-    "ErrorResponse",
-    "PaginatedResponse",
-    # Auth
-    "RegisterRequest",
-    "LoginRequest",
-    "LoginResponse",
+    # 认证
+    "UserLogin",
+    "UserRegister",
     "TokenResponse",
-    "RefreshTokenRequest",
+    "TokenVerifyResponse",
+    "MessageResponse",
     "UserResponse",
-    # User
+    # 用户
     "UserUpdateRequest",
     "PasswordChangeRequest",
     "UserStatsResponse",
-    # Project
+    "UserDeleteRequest",
+    "PasswordChangeResponse",
+    "AvatarUploadResponse",
+    "AvatarDeleteResponse",
+    "AvatarInfoResponse",
+    # 项目
     "ProjectCreate",
     "ProjectUpdate",
     "ProjectResponse",
     "ProjectListResponse",
     "ProjectDeleteResponse",
-    # File
+    "ProjectArchiveResponse",
+    "ProjectProcessingResponse",
+    "ProjectRetryResponse",
+    "ProjectStatusResponse",
+    # 章节
+    "ChapterCreate",
+    "ChapterUpdate",
+    "ChapterResponse",
+    "ChapterListResponse",
+    "ChapterDeleteResponse",
+    "ChapterConfirmResponse",
+    "ChapterStatusResponse",
+    # 段落
+    "ParagraphCreate",
+    "ParagraphUpdate",
+    "ParagraphResponse",
+    "ParagraphBatchUpdateItem",
+    "ParagraphBatchUpdate",
+    "ParagraphListResponse",
+    "ParagraphDeleteResponse",
+    # 句子
+    "SentenceCreate",
+    "SentenceUpdate",
+    "SentenceResponse",
+    "SentenceListResponse",
+    # 文件
     "FileUploadResponse",
+    "FileUploadResult",
+    "FileInfo",
+    "FileResponse",
+    "FileListResponse",
+    "FileDeleteResponse",
+    "FileCleanupResponse",
     "FileStorageUsageResponse",
     "FileBatchDeleteResponse",
     "FileIntegrityCheckResult",
     "FileIntegrityCheckResponse",
     "FileType",
+    # API密钥
+    "APIKeyCreate",
+    "APIKeyUpdate",
+    "APIKeyResponse",
+    "APIKeyListResponse",
+    "APIKeyDeleteResponse",
+    "APIKeyUsageResponse",
+    # 任务
+    "TaskStatusResponse",
+    # 提示词
+    "PromptGenerateRequest",
+    "PromptGenerateResponse",
+    "PromptGenerateByIdsRequest",
+    # 图片
+    "ImageGenerateRequest",
+    "ImageGenerateResponse",
+    # 音频
+    "AudioGenerateRequest",
+    "AudioGenerateResponse",
+    # 视频任务
+    "VideoTaskCreate",
+    "VideoTaskResponse",
+    "VideoTaskListResponse",
+    "VideoTaskStatsResponse",
+    "VideoTaskDeleteResponse",
+    "VideoTaskRetryResponse",
 ]
-
-# 为了向后兼容，确保ProjectResponse也被导出
-__all__.append("ProjectResponse")

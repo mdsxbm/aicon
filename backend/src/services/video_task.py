@@ -331,6 +331,183 @@ class VideoTaskService(BaseService):
         logger.info(f"删除视频任务: ID={task_id}")
         return True
 
+    async def list_user_tasks(
+            self,
+            user_id: str,
+            page: int = 1,
+            size: int = 20,
+            status: Optional[VideoTaskStatus] = None,
+            chapter_id: Optional[str] = None,
+            project_id: Optional[str] = None,
+            sort_by: str = "created_at",
+            sort_order: str = "desc"
+    ) -> Tuple[List[VideoTask], int]:
+        """
+        获取用户的视频任务列表（分页，带过滤和排序）
+
+        Args:
+            user_id: 用户ID
+            page: 页码，从1开始
+            size: 每页大小
+            status: 任务状态过滤（可选）
+            chapter_id: 章节ID过滤（可选）
+            project_id: 项目ID过滤（可选）
+            sort_by: 排序字段
+            sort_order: 排序顺序（asc/desc）
+
+        Returns:
+            (任务列表, 总记录数)
+        """
+        # 参数验证
+        if page < 1:
+            page = 1
+        if size < 1 or size > 100:
+            size = min(max(size, 1), 100)
+
+        # 构建基础查询
+        query = select(VideoTask).filter(VideoTask.user_id == user_id)
+
+        # 状态过滤
+        if status:
+            query = query.filter(VideoTask.status == status.value)
+
+        # 章节过滤
+        if chapter_id:
+            query = query.filter(VideoTask.chapter_id == chapter_id)
+
+        # 项目过滤
+        if project_id:
+            query = query.filter(VideoTask.project_id == project_id)
+
+        # 获取总数
+        count_query = select(func.count(VideoTask.id)).filter(VideoTask.user_id == user_id)
+        if status:
+            count_query = count_query.filter(VideoTask.status == status.value)
+        if chapter_id:
+            count_query = count_query.filter(VideoTask.chapter_id == chapter_id)
+        if project_id:
+            count_query = count_query.filter(VideoTask.project_id == project_id)
+
+        total_result = await self.execute(count_query)
+        total = total_result.scalar()
+
+        # 排序
+        sort_column = getattr(VideoTask, sort_by, VideoTask.created_at)
+        if sort_order == "desc":
+            query = query.order_by(desc(sort_column))
+        else:
+            query = query.order_by(sort_column)
+
+        # 分页
+        offset = (page - 1) * size
+        query = query.offset(offset).limit(size)
+
+        # 执行查询
+        result = await self.execute(query)
+        tasks = result.scalars().all()
+
+        logger.debug(f"查询用户视频任务: 用户={user_id}, 总数={total}, 当前页={page}")
+        return list(tasks), total
+
+    async def get_task_stats(self, user_id: str) -> dict:
+        """
+        获取用户的视频任务统计信息
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            统计信息字典
+        """
+        # 总任务数
+        total_query = select(func.count(VideoTask.id)).filter(VideoTask.user_id == user_id)
+        total_result = await self.execute(total_query)
+        total = total_result.scalar()
+
+        # 各状态任务数
+        pending_query = select(func.count(VideoTask.id)).filter(
+            VideoTask.user_id == user_id,
+            VideoTask.status == VideoTaskStatus.PENDING.value
+        )
+        pending_result = await self.execute(pending_query)
+        pending = pending_result.scalar()
+
+        # 处理中的任务（包括多个中间状态）
+        processing_query = select(func.count(VideoTask.id)).filter(
+            VideoTask.user_id == user_id,
+            VideoTask.status.in_([
+                VideoTaskStatus.VALIDATING.value,
+                VideoTaskStatus.DOWNLOADING_MATERIALS.value,
+                VideoTaskStatus.GENERATING_SUBTITLES.value,
+                VideoTaskStatus.SYNTHESIZING_VIDEOS.value,
+                VideoTaskStatus.CONCATENATING.value,
+                VideoTaskStatus.UPLOADING.value
+            ])
+        )
+        processing_result = await self.execute(processing_query)
+        processing = processing_result.scalar()
+
+        # 已完成
+        completed_query = select(func.count(VideoTask.id)).filter(
+            VideoTask.user_id == user_id,
+            VideoTask.status == VideoTaskStatus.COMPLETED.value
+        )
+        completed_result = await self.execute(completed_query)
+        completed = completed_result.scalar()
+
+        # 失败
+        failed_query = select(func.count(VideoTask.id)).filter(
+            VideoTask.user_id == user_id,
+            VideoTask.status == VideoTaskStatus.FAILED.value
+        )
+        failed_result = await self.execute(failed_query)
+        failed = failed_result.scalar()
+
+        # 计算成功率
+        success_rate = 0.0
+        if completed + failed > 0:
+            success_rate = round((completed / (completed + failed)) * 100, 1)
+
+        return {
+            "total": total,
+            "pending": pending,
+            "processing": processing,
+            "completed": completed,
+            "failed": failed,
+            "success_rate": success_rate
+        }
+
+    async def delete_video_task(self, task_id: str) -> bool:
+        """
+        删除视频任务（不验证用户，由API层验证）
+
+        Args:
+            task_id: 任务ID
+
+        Returns:
+            是否删除成功
+        """
+        task = await self.get_video_task_by_id(task_id)
+
+        # 如果任务正在处理中，不允许删除
+        if task.status in [
+            VideoTaskStatus.VALIDATING.value,
+            VideoTaskStatus.DOWNLOADING_MATERIALS.value,
+            VideoTaskStatus.GENERATING_SUBTITLES.value,
+            VideoTaskStatus.SYNTHESIZING_VIDEOS.value,
+            VideoTaskStatus.CONCATENATING.value,
+            VideoTaskStatus.UPLOADING.value
+        ]:
+            raise BusinessLogicError(
+                "正在处理中的任务不能删除"
+            )
+
+        await self.delete(task)
+        await self.commit()
+
+        logger.info(f"删除视频任务: ID={task_id}")
+        return True
+
 
 __all__ = [
     "VideoTaskService",
