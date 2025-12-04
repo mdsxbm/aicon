@@ -9,7 +9,7 @@ from datetime import timedelta
 from enum import Enum
 from typing import Dict, Optional
 
-from sqlalchemy import Column, Index, Integer, String, Text
+from sqlalchemy import Column, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 
 from src.core.logging import get_logger
@@ -37,8 +37,8 @@ class VideoTask(BaseModel):
 
     # 基础字段 (ID, created_at, updated_at 继承自 BaseModel)
     user_id = Column(PostgreSQLUUID(as_uuid=True), nullable=False, index=True, comment="用户ID（外键索引，无约束）")
-    project_id = Column(PostgreSQLUUID(as_uuid=True), nullable=False, index=True, comment="项目ID（外键索引，无约束）")
-    chapter_id = Column(PostgreSQLUUID(as_uuid=True), nullable=False, index=True, comment="章节ID（外键索引，无约束）")
+    project_id = Column(PostgreSQLUUID(as_uuid=True), ForeignKey('projects.id'), nullable=False, index=True, comment="项目ID（外键索引，无约束）")
+    chapter_id = Column(PostgreSQLUUID(as_uuid=True), ForeignKey('chapters.id'), nullable=False, index=True, comment="章节ID（外键索引，无约束）")
     api_key_id = Column(PostgreSQLUUID(as_uuid=True), nullable=True, index=True, comment="API密钥ID（可选）")
     background_id = Column(PostgreSQLUUID(as_uuid=True), nullable=True, comment="背景音乐/图片ID（可选）")
 
@@ -60,6 +60,11 @@ class VideoTask(BaseModel):
     error_message = Column(Text, nullable=True, comment="错误信息")
     error_sentence_id = Column(PostgreSQLUUID(as_uuid=True), nullable=True, comment="出错的句子ID（用于调试）")
 
+    # 关系定义
+    from sqlalchemy.orm import relationship
+    project = relationship("Project", foreign_keys=[project_id], lazy="noload")
+    chapter = relationship("Chapter", foreign_keys=[chapter_id], lazy="noload")
+
     # 索引定义
     __table_args__ = (
         Index('idx_video_task_user', 'user_id'),
@@ -71,6 +76,34 @@ class VideoTask(BaseModel):
 
     def __repr__(self) -> str:
         return f"<VideoTask(id={self.id}, status={self.status}, progress={self.progress}%)>"
+
+    def to_dict(self, exclude: Optional[list] = None) -> Dict:
+        """
+        转换为字典,自动解析gen_setting并生成video_url
+        
+        Args:
+            exclude: 要排除的字段列表
+            
+        Returns:
+            字典表示
+        """
+        exclude = exclude or []
+        result = super().to_dict(exclude=exclude)
+        
+        # 解析gen_setting为JSON对象
+        if 'gen_setting' in result and result['gen_setting']:
+            try:
+                result['gen_setting'] = json.loads(result['gen_setting'])
+            except (json.JSONDecodeError, TypeError):
+                result['gen_setting'] = {}
+        else:
+            result['gen_setting'] = {}
+        
+        # 生成video_url（如果有video_key）
+        if self.video_key and 'video_url' not in exclude:
+            result['video_url'] = self.get_video_url()
+        
+        return result
 
     def get_gen_setting(self) -> Dict:
         """

@@ -102,7 +102,14 @@ async def get_video_tasks(
     )
 
     # 转换为响应模型
-    task_responses = [VideoTaskResponse.from_dict(task.to_dict()) for task in tasks]
+    task_responses = []
+    for task in tasks:
+        task_dict = task.to_dict()
+        if task.chapter:
+            task_dict['chapter_title'] = task.chapter.title
+        if task.project:
+            task_dict['project_title'] = task.project.title
+        task_responses.append(VideoTaskResponse.from_dict(task_dict))
     total_pages = (total + size - 1) // size
 
     return VideoTaskListResponse(

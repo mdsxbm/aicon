@@ -121,6 +121,14 @@
                 预览
               </el-button>
               <el-button 
+                v-if="row.status === 'completed' && row.video_url"
+                size="small" 
+                type="primary" 
+                @click="downloadVideo(row)"
+              >
+                下载
+              </el-button>
+              <el-button 
                 v-if="row.status === 'failed'"
                 size="small" 
                 type="warning" 
@@ -362,6 +370,19 @@ const isProcessing = (status) => {
     'concatenating',
     'uploading'
   ].includes(status)
+}
+
+const downloadVideo = (row) => {
+  if (row && row.video_url) {
+    const a = document.createElement('a')
+    a.href = row.video_url
+    a.download = `video_${row.chapter_title || 'generated'}.mp4`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } else {
+    ElMessage.warning('视频地址不可用')
+  }
 }
 </script>
 

@@ -91,24 +91,28 @@
 
       <el-collapse v-model="activeCollapse">
         <el-collapse-item title="高级设置" name="advanced">
-          <el-form-item label="字幕样式">
-            <el-row :gutter="10">
-              <el-col :span="12">
-                <el-form-item label="字体大小" label-width="70px">
-                  <el-input-number v-model="form.gen_setting.subtitle_style.font_size" :min="20" :max="100" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="位置" label-width="50px">
-                  <el-select v-model="form.gen_setting.subtitle_style.position">
-                    <el-option label="底部" value="bottom" />
-                    <el-option label="顶部" value="top" />
-                    <el-option label="中间" value="center" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form-item>
+          <el-divider content-position="left">字幕样式</el-divider>
+          <el-row :gutter="15">
+            <el-col :span="12">
+              <el-form-item label="字体大小" prop="gen_setting.subtitle_style.font_size">
+                <el-input-number 
+                  v-model="form.gen_setting.subtitle_style.font_size" 
+                  :min="20" 
+                  :max="100" 
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="位置" prop="gen_setting.subtitle_style.position">
+                <el-select v-model="form.gen_setting.subtitle_style.position" style="width: 100%">
+                  <el-option label="底部" value="bottom" />
+                  <el-option label="顶部" value="top" />
+                  <el-option label="中间" value="center" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
           
           <el-form-item label="镜头移动">
             <el-switch 

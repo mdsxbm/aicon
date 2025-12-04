@@ -168,24 +168,27 @@ const getStatusText = (status) => {
 }
 
 const getActiveStep = (status) => {
+  if (status === 'completed') return 4
+  if (status === 'failed') return 0 
+  
   const steps = [
     ['pending', 'validating', 'downloading_materials'],
     ['generating_subtitles'],
     ['synthesizing_videos', 'concatenating'],
-    ['uploading', 'completed']
+    ['uploading']
   ]
-  
-  if (status === 'failed') return 0 // 或者根据具体失败阶段返回
   
   for (let i = 0; i < steps.length; i++) {
     if (steps[i].includes(status)) return i
   }
   
-  if (status === 'completed') return 4
   return 0
 }
 
 const getProgressText = (task) => {
+  if (task.status === 'completed') return '已完成'
+  if (task.status === 'failed') return '失败'
+  
   if (task.current_sentence_index !== null && task.total_sentences) {
     return `正在处理第 ${task.current_sentence_index}/${task.total_sentences} 句`
   }
@@ -193,17 +196,20 @@ const getProgressText = (task) => {
 }
 
 const formatDuration = (seconds) => {
+  if (!seconds) return '-'
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 const getGenSetting = (task) => {
+  if (!task || !task.gen_setting) return {}
   try {
     return typeof task.gen_setting === 'string' 
       ? JSON.parse(task.gen_setting) 
       : task.gen_setting
   } catch (e) {
+    console.error('解析生成设置失败:', e)
     return {}
   }
 }

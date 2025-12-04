@@ -402,6 +402,13 @@ class VideoTaskService(BaseService):
         offset = (page - 1) * size
         query = query.offset(offset).limit(size)
 
+        # 预加载关联的章节和项目信息
+        from sqlalchemy.orm import selectinload
+        query = query.options(
+            selectinload(VideoTask.chapter),
+            selectinload(VideoTask.project)
+        )
+
         # 执行查询
         result = await self.execute(query)
         tasks = result.scalars().all()
