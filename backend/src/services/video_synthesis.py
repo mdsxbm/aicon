@@ -494,7 +494,26 @@ class VideoSynthesisService(SessionManagedService):
                 if not success:
                     raise BusinessLogicError("视频拼接失败")
 
-                # 16. 混合BGM（如果有）
+                # 16. 应用视频速度（如果不是1.0）
+                video_speed = gen_setting.get("video_speed", 1.0)
+                if video_speed != 1.0:
+                    logger.info(f"开始应用视频速度: {video_speed}x")
+                    from src.utils.ffmpeg_utils import apply_video_speed
+                    
+                    speed_video_path = temp_dir / "final_video_speed.mp4"
+                    speed_success = apply_video_speed(
+                        str(final_video_path),
+                        str(speed_video_path),
+                        video_speed
+                    )
+                    
+                    if speed_success:
+                        final_video_path = speed_video_path
+                        logger.info(f"视频速度调整成功: {video_speed}x")
+                    else:
+                        logger.warning("视频速度调整失败，使用原视频")
+
+                # 17. 混合BGM（如果有）
                 if task.background_id:
                     logger.info(f"开始混合BGM: background_id={task.background_id}")
                     try:

@@ -167,16 +167,13 @@ def build_sentence_video_command(
     video_codec = gen_setting.get("video_codec", "libx264")
     audio_codec = gen_setting.get("audio_codec", "aac")
     audio_bitrate = gen_setting.get("audio_bitrate", "192k")
-    video_speed = gen_setting.get("video_speed", 1.0)  # 视频速度，默认1.0（正常速度）
     zoom_speed = gen_setting.get("zoom_speed", 0.00015)  # Ken Burns缩放速度，默认0.00015
 
     # 解析分辨率
     width, height = resolution.split('x')
     
-    # 计算总帧数（考虑视频速度）
-    # 如果速度是2.0，视频会快2倍，所以帧数减半
-    effective_duration = duration / video_speed
-    total_frames = int(fps * effective_duration)
+    # 计算总帧数
+    total_frames = int(fps * duration)
 
     # 增强的Ken Burns效果：
     # 1. 缩放：从1.0逐渐放大到1.15（更明显的缩放）
@@ -202,55 +199,17 @@ def build_sentence_video_command(
         f"fps={fps}"
     )
     
-    # 如果视频速度不是1.0，添加setpts滤镜
-    if video_speed != 1.0:
-        # setpts用于调整视频时间戳
-        # PTS/(speed) 会让视频加速，例如 speed=2.0 时，PTS/2 让视频快2倍
-        video_filters += f",setpts=PTS/{video_speed}"
-    
-    # 构建音频滤镜链
-    # atempo用于调整音频速度，同时保持音调
-    # atempo的范围是0.5-2.0，如果需要更大的速度变化，需要链式调用
-    audio_filters = "[1:a]"
-    if video_speed != 1.0:
-        # 计算需要多少个atempo滤镜
-        # atempo单次只能在0.5-2.0范围内调整
-        remaining_speed = video_speed
-        atempo_chain = []
-        
-        while remaining_speed > 2.0:
-            atempo_chain.append("atempo=2.0")
-            remaining_speed /= 2.0
-        
-        while remaining_speed < 0.5:
-            atempo_chain.append("atempo=0.5")
-            remaining_speed /= 0.5
-        
-        if remaining_speed != 1.0:
-            atempo_chain.append(f"atempo={remaining_speed}")
-        
-        if atempo_chain:
-            audio_filters += ",".join(atempo_chain)
-    
-    audio_filters += "[a]"
-    
     if subtitle_filter:
         # 有字幕时的滤镜链
         filter_complex = (
             f"{video_filters}[bg];"
-            f"[bg]{subtitle_filter}[v];"
-            f"{audio_filters}"
+            f"[bg]{subtitle_filter}[v]"
         )
         map_video = "[v]"
-        map_audio = "[a]"
     else:
         # 无字幕时的滤镜链
-        filter_complex = (
-            f"{video_filters}[v];"
-            f"{audio_filters}"
-        )
+        filter_complex = f"{video_filters}[v]"
         map_video = "[v]"
-        map_audio = "[a]"
 
     # 构建命令
     command = [
@@ -262,7 +221,7 @@ def build_sentence_video_command(
         "-i", audio_path,
         "-filter_complex", filter_complex,
         "-map", map_video,
-        "-map", map_audio,
+        "-map", "1:a",
         "-c:v", video_codec,
         "-preset", "slow",  # 使用slow预设获得最佳质量
         "-crf", "20",  # 提高质量（更低的CRF值）
@@ -407,6 +366,85 @@ def mix_bgm_with_video(
         return False
 
 
+
+
+def apply_video_speed(
+        input_path: str,
+        output_path: str,
+        speed: float = 1.0
+) -> bool:
+    """
+    对整个视频应用速度调整
+
+    Args:
+        input_path: 输入视频路径
+        output_path: 输出视频路径
+        speed: 播放速度（0.5-2.0），默认1.0（正常速度）
+
+    Returns:
+        是否成功
+    """
+    try:
+        if speed == 1.0:
+            # 速度为1.0时，直接复制文件
+            import shutil
+            shutil.copy2(input_path, output_path)
+            logger.info(f"视频速度为1.0，直接复制文件")
+            return True
+
+        logger.info(f"开始应用视频速度: {speed}x")
+
+        # 构建视频滤镜 - setpts调整视频时间戳
+        video_filter = f"setpts=PTS/{speed}"
+
+        # 构建音频滤镜 - atempo调整音频速度并保持音调
+        # atempo的范围是0.5-2.0，如果需要更大的速度变化，需要链式调用
+        audio_filters = []
+        remaining_speed = speed
+
+        while remaining_speed > 2.0:
+            audio_filters.append("atempo=2.0")
+            remaining_speed /= 2.0
+
+        while remaining_speed < 0.5:
+            audio_filters.append("atempo=0.5")
+            remaining_speed /= 0.5
+
+        if remaining_speed != 1.0:
+            audio_filters.append(f"atempo={remaining_speed}")
+
+        audio_filter = ",".join(audio_filters) if audio_filters else "anull"
+
+        # 构建FFmpeg命令
+        command = [
+            "ffmpeg",
+            "-y",
+            "-i", input_path,
+            "-filter:v", video_filter,
+            "-filter:a", audio_filter,
+            "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", "23",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            output_path
+        ]
+
+        # 执行命令
+        success, stdout, stderr = run_ffmpeg_command(command, timeout=600)
+
+        if success:
+            logger.info(f"视频速度调整成功: {speed}x, 输出={output_path}")
+        else:
+            logger.error(f"视频速度调整失败: {stderr}")
+
+        return success
+
+    except Exception as e:
+        logger.error(f"视频速度调整异常: {e}")
+        return False
+
+
 __all__ = [
     "check_ffmpeg_installed",
     "get_audio_duration",
@@ -414,6 +452,7 @@ __all__ = [
     "run_ffmpeg_command",
     "build_sentence_video_command",
     "concatenate_videos",
+    "apply_video_speed",
     "mix_bgm_with_video",
 ]
 
