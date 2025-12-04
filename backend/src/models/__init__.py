@@ -4,6 +4,7 @@
 
 from src.models.api_key import APIKey, APIKeyProvider, APIKeyStatus
 from src.models.base import Base, BaseModel
+from src.models.bgm import BGM, BGMStatus
 from src.models.chapter import Chapter, ChapterStatus
 from src.models.paragraph import Paragraph, ParagraphAction
 from src.models.project import Project, ProjectStatus
@@ -28,4 +29,6 @@ __all__ = [
     "APIKeyProvider",
     "VideoTask",
     "VideoTaskStatus",
+    "BGM",
+    "BGMStatus",
 ]
