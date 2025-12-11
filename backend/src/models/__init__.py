@@ -8,6 +8,7 @@ from src.models.bgm import BGM, BGMStatus
 from src.models.chapter import Chapter, ChapterStatus
 from src.models.paragraph import Paragraph, ParagraphAction
 from src.models.project import Project, ProjectStatus
+from src.models.publish_task import BilibiliAccount, PublishTask, PublishStatus, PublishPlatform
 from src.models.sentence import Sentence, SentenceStatus
 from src.models.user import User
 from src.models.video_task import VideoTask, VideoTaskStatus
@@ -31,4 +32,8 @@ __all__ = [
     "VideoTaskStatus",
     "BGM",
     "BGMStatus",
+    "PublishTask",
+    "PublishStatus",
+    "PublishPlatform",
+    "BilibiliAccount",
 ]
