@@ -36,7 +36,7 @@ class PublishTask(BaseModel):
     __tablename__ = 'publish_tasks'
 
     # 关联字段
-    chapter_id = Column(PostgreSQLUUID(as_uuid=True), ForeignKey('chapters.id'), nullable=False, index=True, comment="章节外键")
+    video_task_id = Column(PostgreSQLUUID(as_uuid=True), ForeignKey('video_tasks.id'), nullable=False, index=True, comment="视频任务外键")
     user_id = Column(PostgreSQLUUID(as_uuid=True), nullable=False, index=True, comment="用户ID")
     platform = Column(String(20), default=PublishPlatform.BILIBILI.value, comment="发布平台")
 
@@ -69,11 +69,11 @@ class PublishTask(BaseModel):
     published_at = Column(DateTime, comment="发布完成时间")
 
     # 关系定义
-    chapter = relationship("Chapter", back_populates="publish_tasks")
+    video_task = relationship("VideoTask", back_populates="publish_tasks")
 
     # 索引定义
     __table_args__ = (
-        Index('idx_publish_task_chapter', 'chapter_id'),
+        Index('idx_publish_task_video_task', 'video_task_id'),
         Index('idx_publish_task_user', 'user_id'),
         Index('idx_publish_task_status', 'status'),
         Index('idx_publish_task_platform', 'platform'),

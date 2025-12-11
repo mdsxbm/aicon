@@ -64,6 +64,52 @@ async def login_by_qrcode(
     return LoginResponse(**result)
 
 
+@router.get("/publishable-videos")
+async def get_publishable_videos(
+        *,
+        current_user: User = Depends(get_current_user_required),
+        db: AsyncSession = Depends(get_db),
+        limit: int = 20,
+        offset: int = 0
+):
+    """获取可发布的视频列表(已完成的video_tasks)"""
+    from src.models.video_task import VideoTask, VideoTaskStatus
+    from src.models.project import Project
+    from src.models.chapter import Chapter
+    
+    # 查询已完成的视频任务
+    query = select(VideoTask, Project, Chapter).join(
+        Project, VideoTask.project_id == Project.id
+    ).join(
+        Chapter, VideoTask.chapter_id == Chapter.id
+    ).where(
+        VideoTask.user_id == current_user.id,
+        VideoTask.status == VideoTaskStatus.COMPLETED.value,
+        VideoTask.video_key.isnot(None)
+    ).order_by(VideoTask.created_at.desc()).limit(limit).offset(offset)
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    videos = []
+    for video_task, project, chapter in rows:
+        videos.append({
+            "id": str(video_task.id),
+            "project_id": str(video_task.project_id),
+            "project_title": project.title,
+            "chapter_id": str(video_task.chapter_id),
+            "chapter_title": chapter.title,
+            "video_url": video_task.get_video_url(),
+            "video_duration": video_task.video_duration,
+            "created_at": video_task.created_at.isoformat() if video_task.created_at else None,
+        })
+    
+    return {
+        "videos": videos,
+        "total": len(videos)
+    }
+
+
 @router.post("/publish", response_model=PublishResponse)
 async def publish_to_bilibili(
         *,
@@ -73,27 +119,33 @@ async def publish_to_bilibili(
 ):
     """发布视频到B站"""
     
-    # 验证章节是否存在
-    from src.models.chapter import Chapter
-    query = select(Chapter).where(Chapter.id == request.chapter_id)
+    # 验证video_task是否存在且已完成
+    from src.models.video_task import VideoTask, VideoTaskStatus
+    query = select(VideoTask).where(VideoTask.id == request.video_task_id)
     result = await db.execute(query)
-    chapter = result.scalar_one_or_none()
+    video_task = result.scalar_one_or_none()
     
-    if not chapter:
+    if not video_task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="章节不存在"
+            detail="视频任务不存在"
         )
     
-    if not chapter.video_url:
+    if video_task.status != VideoTaskStatus.COMPLETED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="章节视频未生成"
+            detail="视频尚未生成完成"
+        )
+    
+    if not video_task.video_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="视频文件不存在"
         )
     
     # 创建发布任务
     publish_task = PublishTask(
-        chapter_id=chapter.id,
+        video_task_id=video_task.id,
         user_id=current_user.id,
         platform="bilibili",
         title=request.title,
@@ -114,6 +166,7 @@ async def publish_to_bilibili(
     await db.refresh(publish_task)
     
     # 投递Celery任务
+    from src.tasks.bilibili_task import upload_chapter_to_bilibili
     task = upload_chapter_to_bilibili.delay(
         publish_task_id=str(publish_task.id),
         user_id=str(current_user.id)
@@ -154,7 +207,7 @@ async def get_publish_task_status(
     
     return PublishTaskStatus(
         id=str(task.id),
-        chapter_id=str(task.chapter_id),
+        video_task_id=str(task.video_task_id),
         platform=task.platform,
         title=task.title,
         status=task.status,
@@ -195,7 +248,7 @@ async def get_publish_tasks(
     return [
         PublishTaskStatus(
             id=str(task.id),
-            chapter_id=str(task.chapter_id),
+            video_task_id=str(task.video_task_id),
             platform=task.platform,
             title=task.title,
             status=task.status,

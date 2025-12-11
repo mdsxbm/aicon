@@ -352,6 +352,52 @@ docker-compose logs -f
 
 **性能提升**: GPU加速可将字幕生成速度提升3-10倍,具体取决于GPU型号。
 
+#### 6. Bilibili发布工具配置 (可选)
+
+如果需要将生成的视频发布到Bilibili,需要部署biliup-rs工具:
+
+**下载biliup-rs**:
+
+```bash
+# Linux/WSL
+cd backend
+mkdir -p bin
+cd bin
+wget https://github.com/ForgQi/biliup-rs/releases/latest/download/biliup-linux-amd64
+mv biliup-linux-amd64 biliup
+chmod +x biliup
+
+# Windows (PowerShell)
+cd backend
+New-Item -ItemType Directory -Force -Path bin
+cd bin
+# 手动下载: https://github.com/ForgQi/biliup-rs/releases/latest/download/biliup.exe
+```
+
+**创建Cookie存储目录**:
+
+```bash
+cd backend
+mkdir -p data/bilibili_cookies
+```
+
+**验证安装**:
+
+```bash
+# Linux/WSL
+./bin/biliup --version
+
+# Windows
+.\bin\biliup.exe --version
+```
+
+**使用说明**:
+1. 通过API `/api/v1/bilibili/login/qrcode` 扫码登录B站
+2. 调用 `/api/v1/bilibili/publish` 发布视频到B站
+3. 支持自定义分区、标签、封面等配置
+
+详细文档参见: [Bilibili发布集成方案](docs/bilibili_integration_plan.md)
+
 ---
 
 ## 🏗️ 技术架构

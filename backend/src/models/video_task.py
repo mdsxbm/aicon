@@ -64,6 +64,7 @@ class VideoTask(BaseModel):
     from sqlalchemy.orm import relationship
     project = relationship("Project", foreign_keys=[project_id], lazy="noload")
     chapter = relationship("Chapter", foreign_keys=[chapter_id], lazy="noload")
+    publish_tasks = relationship("PublishTask", back_populates="video_task", cascade="all, delete-orphan")
 
     # 索引定义
     __table_args__ = (

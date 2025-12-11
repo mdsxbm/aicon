@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 class PublishRequest(BaseModel):
     """发布请求"""
-    chapter_id: str = Field(..., description="章节ID")
+    video_task_id: str = Field(..., description="视频任务ID")
     title: str = Field(..., min_length=1, max_length=80, description="视频标题")
     desc: str = Field("", max_length=2000, description="视频简介")
     tid: int = Field(171, description="投稿分区ID")
@@ -35,7 +35,7 @@ class PublishResponse(BaseModel):
 class PublishTaskStatus(BaseModel):
     """发布任务状态"""
     id: str = Field(..., description="任务ID")
-    chapter_id: str = Field(..., description="章节ID")
+    video_task_id: str = Field(..., description="视频任务ID")
     platform: str = Field(..., description="发布平台")
     title: str = Field(..., description="视频标题")
     status: str = Field(..., description="发布状态")

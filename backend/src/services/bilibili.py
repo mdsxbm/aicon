@@ -265,7 +265,7 @@ class BilibiliPublishService(SessionManagedService):
         celery_task_id: str
     ) -> Dict[str, Any]:
         """
-        上传章节视频到B站的完整任务流程
+        上传视频任务的视频到B站的完整任务流程
         
         专门为Celery任务调用设计,提供完整的异常处理和状态管理。
         
@@ -278,7 +278,7 @@ class BilibiliPublishService(SessionManagedService):
             上传结果
         """
         from src.models.publish_task import PublishTask
-        from src.services.chapter import ChapterService
+        from src.models.video_task import VideoTask
         
         try:
             logger.info(f"开始Bilibili上传任务: publish_task_id={publish_task_id}")
@@ -296,31 +296,32 @@ class BilibiliPublishService(SessionManagedService):
             publish_task.celery_task_id = celery_task_id
             await self.commit()
             
-            # 3. 获取章节信息
-            chapter_service = ChapterService(self.db_session)
-            chapter = await chapter_service.get_chapter_by_id(
-                str(publish_task.chapter_id)
-            )
+            # 3. 获取视频任务信息
+            query = select(VideoTask).where(VideoTask.id == publish_task.video_task_id)
+            result = await self.execute(query)
+            video_task = result.scalar_one_or_none()
             
-            if not chapter or not chapter.video_url:
-                raise ValueError("章节视频未生成")
+            if not video_task or not video_task.video_key:
+                raise ValueError("视频任务不存在或视频未生成")
             
-            logger.info(f"开始上传章节 {chapter.id} 到B站")
+            logger.info(f"开始上传视频任务 {video_task.id} 到B站")
             
-            # 4. 下载视频和封面
-            video_path = await self._download_video(chapter.video_url)
+            # 4. 下载视频(从MinIO)
+            video_path = await self._download_video_from_minio(video_task.video_key)
+            
+            # 5. 下载封面(如果有)
             cover_path = None
             if publish_task.cover_url:
                 cover_path = await self._download_cover(publish_task.cover_url)
             
-            # 5. 获取cookie文件
+            # 6. 获取cookie文件
             bilibili_service = await self._get_bilibili_service()
             cookie_file = await bilibili_service.get_cookie_file(user_id)
             
             if not cookie_file:
                 raise ValueError("未找到B站登录凭证,请先登录")
             
-            # 6. 上传到B站
+            # 7. 上传到B站
             upload_result = await bilibili_service.upload_video(
                 video_path=video_path,
                 title=publish_task.title,
@@ -337,21 +338,21 @@ class BilibiliPublishService(SessionManagedService):
                 limit=publish_task.upload_limit
             )
             
-            # 7. 清理临时文件
+            # 8. 清理临时文件
             self._cleanup_temp_file(video_path)
             if cover_path:
                 self._cleanup_temp_file(cover_path)
             
-            # 8. 更新任务状态
+            # 9. 更新任务状态
             if upload_result["success"]:
                 publish_task.mark_as_published(
                     bvid=upload_result.get("bvid"),
                     aid=upload_result.get("aid")
                 )
-                logger.info(f"章节 {chapter.id} 上传成功: BV{upload_result.get('bvid')}")
+                logger.info(f"视频任务 {video_task.id} 上传成功: BV{upload_result.get('bvid')}")
             else:
                 publish_task.mark_as_failed(upload_result.get("error", "未知错误"))
-                logger.error(f"章节 {chapter.id} 上传失败: {upload_result.get('error')}")
+                logger.error(f"视频任务 {video_task.id} 上传失败: {upload_result.get('error')}")
             
             await self.commit()
             
@@ -372,8 +373,8 @@ class BilibiliPublishService(SessionManagedService):
             
             raise
     
-    async def _download_video(self, video_url: str) -> str:
-        """下载视频到临时文件"""
+    async def _download_video_from_minio(self, video_key: str) -> str:
+        """从MinIO下载视频到临时文件"""
         storage_service = await self._get_storage_service()
         
         # 创建临时文件
@@ -383,9 +384,9 @@ class BilibiliPublishService(SessionManagedService):
         temp_file = temp_dir / f"video_{os.urandom(8).hex()}.mp4"
         
         # 下载视频
-        await storage_service.download_file(video_url, str(temp_file))
+        await storage_service.download_file(video_key, str(temp_file))
         
-        logger.info(f"视频已下载到: {temp_file}")
+        logger.info(f"视频已从MinIO下载到: {temp_file}")
         return str(temp_file)
     
     async def _download_cover(self, cover_url: str) -> str:
