@@ -42,12 +42,15 @@ async def export_chapter_to_jianying(
         )
         
         # 生成下载URL（使用文件ID）
+        from urllib.parse import quote
         filename = Path(zip_path).name
+        # URL编码文件名以支持中文
+        encoded_filename = quote(filename)
         
         return JianYingExportResponse(
             success=True,
             message="导出成功",
-            download_url=f"/api/v1/export/jianying/download/{filename}",
+            download_url=f"/api/v1/export/jianying/download/{encoded_filename}",
             filename=filename
         )
         
@@ -63,7 +66,7 @@ async def export_chapter_to_jianying(
         )
 
 
-@router.get("/jianying/download/{filename}")
+@router.get("/jianying/download/{filename:path}")
 async def download_jianying_export(
     filename: str,
     current_user: User = Depends(get_current_user_required)
@@ -72,20 +75,26 @@ async def download_jianying_export(
     下载导出的剪映文件
     
     Args:
-        filename: 文件名
+        filename: URL编码的文件名
         
     Returns:
         文件下载响应
     """
     import tempfile
+    from urllib.parse import unquote
     from src.core.logging import get_logger
     
     logger = get_logger(__name__)
     
+    # URL解码文件名
+    decoded_filename = unquote(filename)
+    
     # 构建文件路径（从临时目录）
-    file_path = Path(tempfile.gettempdir()) / filename
+    file_path = Path(tempfile.gettempdir()) / decoded_filename
     
     logger.info(f"尝试下载文件: {file_path}")
+    logger.info(f"原始文件名: {filename}")
+    logger.info(f"解码后文件名: {decoded_filename}")
     logger.info(f"文件是否存在: {file_path.exists()}")
     
     if file_path.exists():
@@ -99,14 +108,37 @@ async def download_jianying_export(
             detail="文件不存在或已过期"
         )
     
-    return FileResponse(
+    # URL编码文件名以支持中文
+    from urllib.parse import quote
+    from fastapi import BackgroundTasks
+    import os
+    
+    # 定义清理函数
+    def cleanup_file(path: str):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+                logger.info(f"清理临时文件: {path}")
+        except Exception as e:
+            logger.error(f"清理文件失败: {e}")
+    
+    # 对文件名进行URL编码（用于Content-Disposition）
+    encoded_filename = quote(decoded_filename)
+    
+    response = FileResponse(
         path=str(file_path),
-        filename=filename,
+        filename=decoded_filename,
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
         }
     )
+    
+    # 注册后台清理任务
+    response.background = BackgroundTasks()
+    response.background.add_task(cleanup_file, str(file_path))
+    
+    return response
 
 
 __all__ = ["router"]

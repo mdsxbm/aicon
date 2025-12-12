@@ -122,6 +122,106 @@ class ProjectService(BaseService):
             await self.rollback()
             raise  # 重新抛出异常，由中间件处理
 
+    async def create_project_from_text(
+            self,
+            owner_id: str,
+            title: str,
+            content: str,
+            description: Optional[str] = None
+    ) -> Project:
+        """
+        从文本内容创建项目
+
+        将文本内容转换为文件并上传到MinIO，然后创建项目。
+
+        Args:
+            owner_id: 所有者用户ID
+            title: 项目标题
+            content: 文本内容
+            description: 项目描述，可选
+
+        Returns:
+            Project: 创建成功的项目对象
+
+        Raises:
+            ValidationError: 当参数验证失败时
+            DatabaseError: 当数据库操作失败时
+        """
+        import hashlib
+        import os
+        import tempfile
+        from fastapi import UploadFile
+        from src.utils.storage import get_storage_client
+
+        try:
+            # 1. 生成文件hash
+            file_hash = hashlib.md5(content.encode('utf-8')).hexdigest()
+            file_size = len(content.encode('utf-8'))
+
+            # 2. 创建临时文件
+            with tempfile.NamedTemporaryFile(
+                mode='w',
+                encoding='utf-8',
+                suffix='.txt',
+                delete=False
+            ) as f:
+                f.write(content)
+                temp_path = f.name
+
+            try:
+                # 3. 上传到MinIO
+                storage_client = await get_storage_client()
+
+                with open(temp_path, 'rb') as f:
+                    # 生成安全的文件名
+                    safe_title = "".join(
+                        c for c in title if c.isalnum() or c in (' ', '-', '_')
+                    ).strip()[:50]
+                    if not safe_title:
+                        safe_title = "project"
+
+                    upload_file = UploadFile(
+                        filename=f"{safe_title}.txt",
+                        file=f
+                    )
+                    result = await storage_client.upload_file(
+                        user_id=owner_id,
+                        file=upload_file,
+                        metadata={
+                            "user_id": owner_id,
+                            "file_type": "text/plain",
+                            "original_filename": f"{safe_title}.txt",
+                            "created_from": "text_import"
+                        }
+                    )
+
+                # 4. 创建项目
+                project = await self.create_project(
+                    owner_id=owner_id,
+                    title=title,
+                    description=description or "通过文本导入创建",
+                    file_name=f"{safe_title}.txt",
+                    file_size=file_size,
+                    file_type="txt",
+                    file_path=result["object_key"],
+                    file_hash=file_hash
+                )
+
+                logger.info(
+                    f"从文本创建项目成功: ID={project.id}, 标题={title}, "
+                    f"文本长度={len(content)}, 所有者={owner_id}"
+                )
+                return project
+
+            finally:
+                # 清理临时文件
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+        except Exception:
+            await self.rollback()
+            raise
+
     async def get_project_by_id(
             self,
             project_id: str,

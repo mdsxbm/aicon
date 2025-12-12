@@ -37,6 +37,15 @@ export const projectsService = {
   },
 
   /**
+   * 从文本创建新项目
+   * @param {Object} textData - 文本数据 {title, description, content}
+   * @returns {Promise} 创建的项目
+   */
+  async createProjectFromText(textData) {
+    return await post('/projects/from-text', textData)
+  },
+
+  /**
    * 更新项目
    * @param {string} projectId - 项目ID
    * @param {Object} updateData - 更新数据

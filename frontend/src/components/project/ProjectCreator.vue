@@ -1,117 +1,182 @@
 <template>
   <div class="project-creator">
-    <!-- 文件上传区域 -->
-    <div v-if="!selectedFile" class="upload-section">
-      <el-upload
-        ref="uploadRef"
-        class="upload-dragger"
-        drag
-        :auto-upload="false"
-        :show-file-list="false"
-        :accept="acceptedTypes"
-        :limit="1"
-        :on-change="handleFileChange"
-        :before-upload="beforeUpload"
-      >
-        <div class="upload-content">
-          <el-icon class="upload-icon">
-            <UploadFilled />
-          </el-icon>
-          <div class="upload-text">
-            <h3>拖拽文件到此处上传</h3>
-            <p>或点击选择文件</p>
-            <p class="upload-hint">支持 TXT、MD、DOCX、EPUB 格式，最大 100MB</p>
-          </div>
+    <!-- 创建方式选择 -->
+    <el-tabs v-model="activeTab" class="creator-tabs">
+      <!-- 文件上传方式 -->
+      <el-tab-pane label="上传文件" name="file">
+        <!-- 文件上传区域 -->
+        <div v-if="!selectedFile" class="upload-section">
+          <el-upload
+            ref="uploadRef"
+            class="upload-dragger"
+            drag
+            :auto-upload="false"
+            :show-file-list="false"
+            :accept="acceptedTypes"
+            :limit="1"
+            :on-change="handleFileChange"
+            :before-upload="beforeUpload"
+          >
+            <div class="upload-content">
+              <el-icon class="upload-icon">
+                <UploadFilled />
+              </el-icon>
+              <div class="upload-text">
+                <h3>拖拽文件到此处上传</h3>
+                <p>或点击选择文件</p>
+                <p class="upload-hint">支持 TXT、MD、DOCX、EPUB 格式，最大 100MB</p>
+              </div>
+            </div>
+          </el-upload>
         </div>
-      </el-upload>
-    </div>
 
-    <!-- 上传进度 -->
-    <div v-else-if="uploading" class="upload-progress">
-      <div class="progress-content">
-        <el-icon class="progress-icon">
-          <Loading />
-        </el-icon>
-        <div class="progress-text">
-          <h3>正在上传文件...</h3>
-          <p>{{ selectedFile.name }}</p>
-          <div class="progress-bar">
-            <el-progress :percentage="0" status="active" />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 文件信息表单 -->
-    <div v-else class="form-section">
-      <!-- 文件预览卡片 -->
-      <div class="file-preview">
-        <div class="file-card">
-          <el-icon class="file-icon">
-            <Document />
-          </el-icon>
-          <div class="file-info">
-            <div class="file-name">{{ selectedFile.name }}</div>
-            <div class="file-meta">
-              {{ formatFileSize(selectedFile.size) }} · {{ getFileTypeText(selectedFile.name) }}
+        <!-- 上传进度 -->
+        <div v-else-if="uploading" class="upload-progress">
+          <div class="progress-content">
+            <el-icon class="progress-icon">
+              <Loading />
+            </el-icon>
+            <div class="progress-text">
+              <h3>正在上传文件...</h3>
+              <p>{{ selectedFile.name }}</p>
+              <div class="progress-bar">
+                <el-progress :percentage="0" status="active" />
+              </div>
             </div>
           </div>
-          <el-button
-            type="text"
-            :icon="Delete"
-            @click="removeFile"
-            class="remove-btn"
-          />
         </div>
-      </div>
 
-      <!-- 项目信息表单 -->
-      <el-form
-        ref="formRef"
-        :model="formData"
-        :rules="formRules"
-        label-position="top"
-        @submit.prevent="handleSubmit"
-      >
-        <el-form-item label="项目标题" prop="title">
-          <el-input
-            v-model="formData.title"
-            placeholder="请输入项目标题"
-            maxlength="200"
-            show-word-limit
-            clearable
-          />
-        </el-form-item>
+        <!-- 文件信息表单 -->
+        <div v-else class="form-section">
+          <!-- 文件预览卡片 -->
+          <div class="file-preview">
+            <div class="file-card">
+              <el-icon class="file-icon">
+                <Document />
+              </el-icon>
+              <div class="file-info">
+                <div class="file-name">{{ selectedFile.name }}</div>
+                <div class="file-meta">
+                  {{ formatFileSize(selectedFile.size) }} · {{ getFileTypeText(selectedFile.name) }}
+                </div>
+              </div>
+              <el-button
+                type="text"
+                :icon="Delete"
+                @click="removeFile"
+                class="remove-btn"
+              />
+            </div>
+          </div>
 
-        <el-form-item label="项目描述" prop="description">
-          <el-input
-            v-model="formData.description"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入项目描述（可选）"
-            maxlength="1000"
-            show-word-limit
-          />
-        </el-form-item>
-
-        <el-form-item>
-          <el-checkbox v-model="formData.auto_process">
-            自动处理文件（上传后立即开始文件内容分析）
-          </el-checkbox>
-        </el-form-item>
-
-        <div class="form-actions">
-          <el-button @click="handleCancel">取消</el-button>
-          <el-button
-            type="primary"
-            native-type="submit"
-            :loading="submitting"
+          <!-- 项目信息表单 -->
+          <el-form
+            ref="formRef"
+            :model="formData"
+            :rules="formRules"
+            label-position="top"
+            @submit.prevent="handleSubmit"
           >
-            创建项目
-          </el-button>
+            <el-form-item label="项目标题" prop="title">
+              <el-input
+                v-model="formData.title"
+                placeholder="请输入项目标题"
+                maxlength="200"
+                show-word-limit
+                clearable
+              />
+            </el-form-item>
+
+            <el-form-item label="项目描述" prop="description">
+              <el-input
+                v-model="formData.description"
+                type="textarea"
+                :rows="3"
+                placeholder="请输入项目描述（可选）"
+                maxlength="1000"
+                show-word-limit
+              />
+            </el-form-item>
+
+            <el-form-item>
+              <el-checkbox v-model="formData.auto_process">
+                自动处理文件（上传后立即开始文件内容分析）
+              </el-checkbox>
+            </el-form-item>
+
+            <div class="form-actions">
+              <el-button @click="handleCancel">取消</el-button>
+              <el-button
+                type="primary"
+                native-type="submit"
+                :loading="submitting"
+              >
+                创建项目
+              </el-button>
+            </div>
+          </el-form>
         </div>
-      </el-form>
-    </div>
+      </el-tab-pane>
+
+      <!-- 文本导入方式 -->
+      <el-tab-pane label="导入文本" name="text">
+        <el-form
+          ref="textFormRef"
+          :model="textFormData"
+          :rules="textFormRules"
+          label-position="top"
+          @submit.prevent="handleTextSubmit"
+        >
+          <el-form-item label="项目标题" prop="title">
+            <el-input
+              v-model="textFormData.title"
+              placeholder="请输入项目标题"
+              maxlength="200"
+              show-word-limit
+              clearable
+            />
+          </el-form-item>
+
+          <el-form-item label="项目描述" prop="description">
+            <el-input
+              v-model="textFormData.description"
+              type="textarea"
+              :rows="2"
+              placeholder="可选，描述项目内容"
+              maxlength="1000"
+              show-word-limit
+            />
+          </el-form-item>
+
+          <el-form-item label="文本内容" prop="content">
+            <el-input
+              v-model="textFormData.content"
+              type="textarea"
+              :rows="15"
+              placeholder="请粘贴或输入文本内容（至少100字符）..."
+              show-word-limit
+              :maxlength="500000"
+            />
+          </el-form-item>
+
+          <div class="word-count">
+            <el-icon><Document /></el-icon>
+            字数统计: {{ wordCount }} 字
+          </div>
+
+          <div class="form-actions">
+            <el-button @click="handleCancel">取消</el-button>
+            <el-button
+              type="primary"
+              native-type="submit"
+              :loading="submitting"
+            >
+              创建项目
+            </el-button>
+          </div>
+        </el-form>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
@@ -141,19 +206,28 @@ const emit = defineEmits([
 // 响应式数据
 const uploadRef = ref()
 const formRef = ref()
+const textFormRef = ref()
 const uploading = ref(false)
 const submitting = ref(false)
 const selectedFile = ref(null)
 const uploadedFileInfo = ref(null)
+const activeTab = ref('file')
 
-// 表单数据
+// 文件上传表单数据
 const formData = reactive({
   title: '',
   description: '',
   auto_process: true
 })
 
-// 表单验证规则
+// 文本导入表单数据
+const textFormData = reactive({
+  title: '',
+  description: '',
+  content: ''
+})
+
+// 文件上传表单验证规则
 const formRules = {
   title: [
     { required: true, message: '请输入项目标题', trigger: 'blur' },
@@ -161,6 +235,22 @@ const formRules = {
   ],
   description: [
     { max: 1000, message: '描述长度不能超过1000个字符', trigger: 'blur' }
+  ]
+}
+
+// 文本导入表单验证规则
+const textFormRules = {
+  title: [
+    { required: true, message: '请输入项目标题', trigger: 'blur' },
+    { min: 1, max: 200, message: '标题长度应在1-200个字符之间', trigger: 'blur' }
+  ],
+  description: [
+    { max: 1000, message: '描述长度不能超过1000个字符', trigger: 'blur' }
+  ],
+  content: [
+    { required: true, message: '请输入文本内容', trigger: 'blur' },
+    { min: 100, message: '文本内容至少需要100字符', trigger: 'blur' },
+    { max: 500000, message: '文本内容不能超过500,000字符', trigger: 'blur' }
   ]
 }
 
@@ -186,6 +276,13 @@ const formatFileSize = (bytes) => {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
+
+// 字数统计
+const wordCount = computed(() => {
+  if (!textFormData.content) return 0
+  // 移除空白字符后计算长度
+  return textFormData.content.replace(/\s/g, '').length
+})
 
 // 监听loading状态
 const loading = computed(() => props.loading)
@@ -321,17 +418,55 @@ const handleSubmit = async () => {
   }
 }
 
+const handleTextSubmit = async () => {
+  try {
+    // 验证表单
+    const valid = await textFormRef.value.validate()
+    if (!valid) return
+
+    submitting.value = true
+
+    // 准备文本数据
+    const textData = {
+      title: textFormData.title.trim(),
+      description: textFormData.description.trim(),
+      content: textFormData.content
+    }
+
+    // 调用文本导入API创建项目
+    const result = await projectsService.createProjectFromText(textData)
+
+    ElMessage.success('项目创建成功，正在解析文本内容')
+    emit('submit', result)
+
+  } catch (error) {
+    console.error('项目创建失败:', error)
+    ElMessage.error(error.message || '项目创建失败')
+    emit('error', error)
+  } finally {
+    submitting.value = false
+  }
+}
+
 const handleCancel = () => {
   emit('cancel')
 }
 
 const resetForm = async () => {
-  // 重置表单状态
+  // 重置文件上传表单状态
   selectedFile.value = null
   uploadedFileInfo.value = null
   formData.title = ''
   formData.description = ''
   formData.auto_process = true
+
+  // 重置文本导入表单状态
+  textFormData.title = ''
+  textFormData.description = ''
+  textFormData.content = ''
+
+  // 重置选项卡
+  activeTab.value = 'file'
 
   if (uploadRef.value) {
     uploadRef.value.clearFiles()
@@ -339,6 +474,10 @@ const resetForm = async () => {
 
   if (formRef.value) {
     formRef.value.clearValidate()
+  }
+
+  if (textFormRef.value) {
+    textFormRef.value.clearValidate()
   }
 }
 
@@ -352,6 +491,30 @@ defineExpose({
 <style scoped>
 .project-creator {
   width: 100%;
+}
+
+.creator-tabs {
+  margin-bottom: var(--space-md);
+}
+
+.creator-tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--space-lg);
+}
+
+.word-count {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-md);
+}
+
+.word-count .el-icon {
+  color: var(--primary-color);
 }
 
 .upload-section,

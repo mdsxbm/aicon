@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.dependencies import get_current_user_required
 from src.api.schemas.project import (ProjectArchiveResponse, ProjectCreate, ProjectDeleteResponse, ProjectListResponse,
                                      ProjectProcessingResponse, ProjectResponse,
-                                     ProjectRetryResponse, ProjectStatusResponse, ProjectUpdate)
+                                     ProjectRetryResponse, ProjectStatusResponse, ProjectUpdate, ProjectFromTextCreate)
 from src.core.database import get_db
 from src.core.logging import get_logger
 from src.models.project import ProjectStatus as ModelProjectStatus
@@ -126,6 +126,52 @@ async def create_project(
     return ProjectProcessingResponse(
         success=True,
         message="项目创建成功，已开始解析文件",
+        project=ProjectResponse.from_dict(project.to_dict()),
+        task_id=task.id,
+        processing_status="parsing",
+        can_retry=False
+    )
+
+
+@router.post("/from-text", response_model=ProjectProcessingResponse)
+async def create_project_from_text(
+        *,
+        current_user: User = Depends(get_current_user_required),
+        db: AsyncSession = Depends(get_db),
+        project_data: ProjectFromTextCreate
+):
+    """从文本内容创建新项目并启动解析任务"""
+    from src.api.schemas.project import ProjectFromTextCreate
+    
+    project_service = ProjectService(db)
+
+    # 从文本创建项目
+    project = await project_service.create_project_from_text(
+        owner_id=current_user.id,
+        title=project_data.title,
+        content=project_data.content,
+        description=project_data.description
+    )
+
+    # 检查项目是否可以处理
+    if not project.can_be_processed():
+        return ProjectProcessingResponse(
+            success=False,
+            message=f"项目状态不允许处理: {project.status}",
+            project=ProjectResponse.from_dict(project.to_dict()),
+            processing_status=project.status,
+            can_retry=False
+        )
+
+    # 投递Celery解析任务
+    from src.tasks.task import process_uploaded_file
+    task = process_uploaded_file.delay(str(project.id), current_user.id)
+
+    logger.info(f"从文本创建项目 {project.id} 成功，已投递解析任务: {task.id}")
+
+    return ProjectProcessingResponse(
+        success=True,
+        message="项目创建成功，已开始解析文本内容",
         project=ProjectResponse.from_dict(project.to_dict()),
         task_id=task.id,
         processing_status="parsing",

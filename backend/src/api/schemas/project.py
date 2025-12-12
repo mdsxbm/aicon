@@ -36,6 +36,24 @@ class ProjectCreate(BaseModel):
     }
 
 
+class ProjectFromTextCreate(BaseModel):
+    """从文本创建项目请求模型"""
+    title: str = Field(..., min_length=1, max_length=200, description="项目标题")
+    description: Optional[str] = Field(None, max_length=1000, description="项目描述")
+    content: str = Field(..., min_length=100, max_length=500000, description="文本内容")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "title": "我的小说项目",
+                "description": "这是一个关于科幻小说的项目",
+                "content": "第一章\n\n这是小说的开头..."
+            }
+        }
+    }
+
+
+
 class ProjectUpdate(BaseModel):
     """更新项目请求模型 - 只允许编辑标题和描述"""
     title: Optional[str] = Field(None, min_length=1, max_length=200, description="项目标题")
@@ -261,6 +279,7 @@ class ProjectStatusResponse(BaseModel):
 
 __all__ = [
     "ProjectCreate",
+    "ProjectFromTextCreate",
     "ProjectUpdate",
     "ProjectResponse",
     "ProjectListResponse",
