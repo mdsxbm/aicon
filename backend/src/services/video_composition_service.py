@@ -62,7 +62,7 @@ class VideoCompositionService:
             await material_service.fetch_material_from_minio(sentence.audio_url, audio_path)
 
             # 生成字幕时间轴
-            subtitle_data = subtitle_service.generate_subtitle_timeline(str(audio_path))
+            subtitle_data = subtitle_service.generate_subtitle_timeline(str(audio_path),sentence.content)
 
             # 如果提供了API密钥，使用LLM纠正字幕
             if api_key:

@@ -8,7 +8,7 @@ logger = get_logger(__name__)
 
 
 class WhisperTranscriptionService:
-    def __init__(self, model_size="small", device="cpu", compute_type="float32"):
+    def __init__(self, model_size="medium", device="cuda", compute_type="float32"):
         """
         初始化语音识别服务（可复用模型，不需要每次都加载）
         """
@@ -27,11 +27,17 @@ class WhisperTranscriptionService:
         seconds = seconds % 60
         return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
 
-    def transcribe(self, audio_path, output_format="all"):
+    def transcribe(self, audio_path, output_format="all",initial_prompt: str | None = None):
         """
         执行语音转写任务
-        :param audio_path: 音频文件路径
-        :param output_format: json / srt / all
+        
+        Args:
+            audio_path: 音频文件路径
+            output_format: 输出格式，支持 "json", "srt", "all"
+            initial_prompt: 初始提示文本，用于引导识别（可选）
+        Returns:
+            如果 output_format 包含 "json"，返回时间轴 JSON 列表；
+            如果包含 "srt"，返回 SRT 字幕内容。
         """
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"❌ 找不到音频文件: {audio_path}")
@@ -41,11 +47,13 @@ class WhisperTranscriptionService:
         segments, info = self.model.transcribe(
             audio_path,
             beam_size=10,
-            vad_filter=True,
+            vad_filter=False,
             word_timestamps=True,
             language="zh",
             task="transcribe",
             temperature=0.0,
+            # initial_prompt=initial_prompt,          # ✅ 新增：源文本/提示
+            condition_on_previous_text=True,        # ✅ 一般保持 True，帮助长音频连贯
         )
 
         logger.info(

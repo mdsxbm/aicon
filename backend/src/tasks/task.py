@@ -33,6 +33,7 @@ celery_app = Celery(
     "file_processing",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
+    include=["src.tasks.task", "src.tasks.bilibili_task"]
 )
 
 celery_app.conf.update(

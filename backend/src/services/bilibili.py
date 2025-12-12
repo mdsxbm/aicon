@@ -157,8 +157,8 @@ class BilibiliService(BaseService):
         self,
         video_path: str,
         title: str,
-        desc: str = "",
-        tid: int = 171,
+        desc: str,
+        tid: int,
         cover: Optional[str] = None,
         tag: Optional[str] = None,
         copyright: int = 1,
@@ -166,7 +166,7 @@ class BilibiliService(BaseService):
         dynamic: Optional[str] = None,
         dtime: Optional[int] = None,
         cookie_file: Optional[str] = None,
-        line: str = "kodo",
+        line: str = "bda2",
         limit: int = 3
     ) -> Dict[str, Any]:
         """
@@ -174,9 +174,9 @@ class BilibiliService(BaseService):
         
         Args:
             video_path: 视频文件路径
-            title: 视频标题
-            desc: 视频简介
-            tid: 投稿分区
+            title: 标题
+            desc: 简介
+            tid: 分区ID
             cover: 封面图片路径
             tag: 标签,逗号分隔
             copyright: 1原创 2转载
@@ -190,17 +190,27 @@ class BilibiliService(BaseService):
         Returns:
             上传结果
         """
-        cmd = [
-            self.biliup_path,
-            "upload",
-            video_path,
+        # Build command with -u flag before upload subcommand
+        cmd = [self.biliup_path]
+        
+        # Add cookie file flag before upload subcommand
+        if cookie_file:
+            from pathlib import Path
+            abs_cookie_path = str(Path(cookie_file).resolve())
+            cmd.extend(["-u", abs_cookie_path])
+        
+        # Add upload subcommand and video path
+        cmd.extend(["upload", video_path])
+        
+        # Add upload options
+        cmd.extend([
             "--title", title,
             "--desc", desc,
             "--tid", str(tid),
             "--copyright", str(copyright),
             "--line", line,
             "--limit", str(limit)
-        ]
+        ])
         
         if cover:
             cmd.extend(["--cover", cover])
@@ -212,8 +222,6 @@ class BilibiliService(BaseService):
             cmd.extend(["--dynamic", dynamic])
         if dtime:
             cmd.extend(["--dtime", str(dtime)])
-        if cookie_file:
-            cmd.extend(["-u", cookie_file])
         
         logger.info(f"执行上传命令: {' '.join(cmd)}")
         
@@ -295,8 +303,8 @@ class BilibiliPublishService(SessionManagedService):
     async def _get_storage_service(self):
         """延迟导入storage_service"""
         if self._storage_service is None:
-            from src.services.storage import storage_service
-            self._storage_service = storage_service
+            from src.utils.storage import get_storage_client
+            self._storage_service = await get_storage_client()
         return self._storage_service
     
     async def upload_chapter_task(
@@ -320,6 +328,8 @@ class BilibiliPublishService(SessionManagedService):
         """
         from src.models.publish_task import PublishTask
         from src.models.video_task import VideoTask
+        
+        publish_task = None  # Initialize to ensure it's available in exception handler
         
         try:
             logger.info(f"开始Bilibili上传任务: publish_task_id={publish_task_id}")
@@ -357,10 +367,16 @@ class BilibiliPublishService(SessionManagedService):
             
             # 6. 获取cookie文件
             bilibili_service = await self._get_bilibili_service()
-            cookie_file = await bilibili_service.get_cookie_file(user_id)
+            
+            # 优先使用指定账号的cookie
+            if publish_task.account_id:
+                cookie_file = await bilibili_service.get_cookie_file_for_account(str(publish_task.account_id))
+            else:
+                # 兼容旧逻辑: 使用默认或最近登录账号
+                cookie_file = await bilibili_service.get_cookie_file(user_id)
             
             if not cookie_file:
-                raise ValueError("未找到B站登录凭证,请先登录")
+                raise ValueError("未找到B站登录凭证,请先在账号管理中添加账号")
             
             # 7. 上传到B站
             upload_result = await bilibili_service.upload_video(
@@ -378,11 +394,6 @@ class BilibiliPublishService(SessionManagedService):
                 line=publish_task.upload_line,
                 limit=publish_task.upload_limit
             )
-            
-            # 8. 清理临时文件
-            self._cleanup_temp_file(video_path)
-            if cover_path:
-                self._cleanup_temp_file(cover_path)
             
             # 9. 更新任务状态
             if upload_result["success"]:
@@ -413,6 +424,12 @@ class BilibiliPublishService(SessionManagedService):
                 await self.commit()
             
             raise
+        finally:
+            # 8. 清理临时文件 (moved to finally to ensure cleanup even on failure)
+            if 'video_path' in locals():
+                self._cleanup_temp_file(video_path)
+            if 'cover_path' in locals() and cover_path:
+                self._cleanup_temp_file(cover_path)
     
     async def _download_video_from_minio(self, video_key: str) -> str:
         """从MinIO下载视频到临时文件"""
@@ -425,7 +442,7 @@ class BilibiliPublishService(SessionManagedService):
         temp_file = temp_dir / f"video_{os.urandom(8).hex()}.mp4"
         
         # 下载视频
-        await storage_service.download_file(video_key, str(temp_file))
+        await storage_service.download_file_to_path(video_key, str(temp_file))
         
         logger.info(f"视频已从MinIO下载到: {temp_file}")
         return str(temp_file)
@@ -442,7 +459,7 @@ class BilibiliPublishService(SessionManagedService):
         temp_file = temp_dir / f"cover_{os.urandom(8).hex()}{ext}"
         
         # 下载封面
-        await storage_service.download_file(cover_url, str(temp_file))
+        await storage_service.download_file_to_path(cover_url, str(temp_file))
         
         logger.info(f"封面已下载到: {temp_file}")
         return str(temp_file)

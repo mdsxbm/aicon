@@ -62,6 +62,13 @@ export const bilibiliService = {
     },
 
     /**
+     * 重试发布任务
+     */
+    async retryTask(taskId) {
+        return await post(`/bilibili/tasks/${taskId}/retry`)
+    },
+
+    /**
      * 获取可发布的视频列表
      */
     async getPublishableVideos(params = {}) {

@@ -38,6 +38,7 @@ class PublishTask(BaseModel):
     # 关联字段
     video_task_id = Column(PostgreSQLUUID(as_uuid=True), ForeignKey('video_tasks.id'), nullable=False, index=True, comment="视频任务外键")
     user_id = Column(PostgreSQLUUID(as_uuid=True), nullable=False, index=True, comment="用户ID")
+    account_id = Column(PostgreSQLUUID(as_uuid=True), ForeignKey('bilibili_accounts.id'), nullable=True, comment="使用的B站账号ID")
     platform = Column(String(20), default=PublishPlatform.BILIBILI.value, comment="发布平台")
 
     # 发布配置
@@ -52,7 +53,7 @@ class PublishTask(BaseModel):
     dtime = Column(Integer, comment="延时发布时间戳")
 
     # 上传配置
-    upload_line = Column(String(20), default='kodo', comment="上传线路")
+    upload_line = Column(String(20), default='bda2', comment="上传线路")
     upload_limit = Column(Integer, default=3, comment="并发数")
 
     # 状态字段

@@ -32,6 +32,12 @@ class FileHandler:
         'text/x-markdown': 'md',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
         'application/epub+zip': 'epub',
+        # 图片类型
+        'image/jpeg': 'image',
+        'image/png': 'image',
+        'image/gif': 'image',
+        'image/webp': 'image',
+        'image/bmp': 'image',
     }
 
     # 文件扩展名映射
@@ -41,6 +47,13 @@ class FileHandler:
         '.markdown': 'md',
         '.docx': 'docx',
         '.epub': 'epub',
+        # 图片扩展名
+        '.jpg': 'image',
+        '.jpeg': 'image',
+        '.png': 'image',
+        '.gif': 'image',
+        '.webp': 'image',
+        '.bmp': 'image',
     }
 
     # 文件类型配置（整合自validators.py的有用配置）
@@ -68,6 +81,12 @@ class FileHandler:
             'extensions': ['.epub'],
             'max_size': 200 * 1024 * 1024,  # 200MB
             'description': 'EPUB电子书'
+        },
+        'image': {
+            'mime_types': ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'],
+            'extensions': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'],
+            'max_size': 10 * 1024 * 1024,  # 10MB
+            'description': '图片文件'
         }
     }
 

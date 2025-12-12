@@ -23,12 +23,13 @@ logger = get_logger(__name__)
 class SubtitleService:
     """字幕服务 - 处理所有字幕相关操作"""
 
-    def generate_subtitle_timeline(self, audio_path: str) -> dict:
+    def generate_subtitle_timeline(self, audio_path: str, original_text: str) -> dict:
         """
         生成字幕时间轴
 
         Args:
             audio_path: 音频文件路径
+            original_text: 原始句子文本（用于提示Whisper更好识别）
 
         Returns:
             字幕数据，包含segments和duration
@@ -37,7 +38,8 @@ class SubtitleService:
             # 使用Whisper服务进行转录
             results, srt_content = transcription_service.transcribe(
                 audio_path,
-                output_format="json"
+                output_format="json",
+                initial_prompt=original_text
             )
 
             # 获取音频时长

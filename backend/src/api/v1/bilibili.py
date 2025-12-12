@@ -18,7 +18,7 @@ from src.api.schemas.bilibili import (
     TidOption
 )
 from src.core.database import get_db
-from src.models.publish_task import BilibiliAccount, PublishTask
+from src.models.publish_task import BilibiliAccount, PublishTask, PublishStatus
 from src.models.user import User
 from src.services.bilibili import BilibiliService
 from src.tasks.bilibili_task import upload_chapter_to_bilibili
@@ -239,6 +239,7 @@ async def publish_to_bilibili(
     publish_task = PublishTask(
         video_task_id=video_task.id,
         user_id=current_user.id,
+        account_id=request.account_id,  # 保存选中的账号ID
         platform="bilibili",
         title=request.title,
         desc=request.desc,
@@ -273,6 +274,53 @@ async def publish_to_bilibili(
         task_id=task.id,
         publish_task_id=str(publish_task.id),
         message="发布任务已提交"
+    )
+
+
+@router.post("/tasks/{task_id}/retry", response_model=PublishResponse)
+async def retry_publish_task(
+        *,
+        current_user: User = Depends(get_current_user_required),
+        db: AsyncSession = Depends(get_db),
+        task_id: str
+):
+    """重试发布任务"""
+    query = select(PublishTask).where(
+        PublishTask.id == task_id,
+        PublishTask.user_id == current_user.id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+    
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="任务不存在"
+        )
+        
+    # 重置任务状态
+    task.status = PublishStatus.PENDING.value
+    task.error_message = None
+    task.progress = 0
+    await db.commit()
+    await db.refresh(task)
+    
+    # 重新投递Celery任务
+    from src.tasks.bilibili_task import upload_chapter_to_bilibili
+    celery_task = upload_chapter_to_bilibili.delay(
+        publish_task_id=str(task.id),
+        user_id=str(current_user.id)
+    )
+    
+    # 更新Celery任务ID
+    task.celery_task_id = celery_task.id
+    await db.commit()
+    
+    return PublishResponse(
+        success=True,
+        task_id=celery_task.id,
+        publish_task_id=str(task.id),
+        message="重试任务已提交"
     )
 
 

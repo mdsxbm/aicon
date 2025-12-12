@@ -89,8 +89,8 @@ class Settings(BaseSettings):
         env="CELERY_RESULT_BACKEND"
     )
     CELERY_WORKER_CONCURRENCY: int = 4
-    CELERY_TASK_SOFT_TIME_LIMIT: int = 300  # 5分钟
-    CELERY_TASK_TIME_LIMIT: int = 600  # 10分钟
+    CELERY_TASK_SOFT_TIME_LIMIT: int = 3000  # 50分钟
+    CELERY_TASK_TIME_LIMIT: int = 6000  # 100分钟
 
     # 日志配置
     LOG_LEVEL: str = "INFO"

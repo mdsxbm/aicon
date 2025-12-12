@@ -10,23 +10,16 @@
         <p class="page-description">将生成的视频发布到Bilibili平台</p>
       </div>
       <div class="header-right">
-        <el-button type="primary" @click="handleLogin" :loading="loginLoading">
+        <el-button @click="goToAccountManagement">
           <el-icon><User /></el-icon>
-          {{ accountStatus.logged_in ? '重新登录' : 'B站登录' }}
+          账号管理
+        </el-button>
+        <el-button type="primary" @click="handleRefresh">
+          <el-icon><Refresh /></el-icon>
+          刷新
         </el-button>
       </div>
     </div>
-
-    <!-- 账号状态卡片 -->
-    <el-card v-if="accountStatus.logged_in" class="account-status-card" shadow="never">
-      <div class="account-info">
-        <el-icon class="status-icon success"><CircleCheck /></el-icon>
-        <div class="info-content">
-          <div class="account-name">{{ accountStatus.account_name }}</div>
-          <div class="login-time">最后登录: {{ formatTime(accountStatus.last_login_at) }}</div>
-        </div>
-      </div>
-    </el-card>
 
     <!-- 标签页 -->
     <el-tabs v-model="activeTab" class="publish-tabs">
@@ -34,7 +27,7 @@
       <el-tab-pane label="可发布视频" name="videos">
         <div v-loading="videosLoading" class="videos-container">
           <el-empty v-if="!videosLoading && videos.length === 0" description="暂无可发布的视频">
-            <el-button type="primary" @click="$router.push('/video-tasks')">
+            <el-button type="primary" @click="$router.push('/generation')">
               前往视频任务
             </el-button>
           </el-empty>
@@ -74,8 +67,19 @@
           <div v-else class="task-list">
             <div v-for="task in tasks" :key="task.id" class="task-item">
               <div class="task-header">
-                <h4 class="task-title">{{ task.title }}</h4>
-                <el-tag :type="getStatusType(task.status)">{{ getStatusText(task.status) }}</el-tag>
+                <div class="header-left">
+                  <h4 class="task-title">{{ task.title }}</h4>
+                  <el-tag :type="getStatusType(task.status)">{{ getStatusText(task.status) }}</el-tag>
+                </div>
+                <el-button 
+                  v-if="['failed', 'pending'].includes(task.status)" 
+                  type="primary" 
+                  link
+                  :loading="retryingTaskId === task.id"
+                  @click="handleRetry(task)"
+                >
+                  重试
+                </el-button>
               </div>
               
               <el-progress 
@@ -110,6 +114,18 @@
       :close-on-click-modal="false"
     >
       <el-form :model="publishForm" :rules="publishRules" ref="publishFormRef" label-width="80px">
+        <el-form-item label="发布账号" prop="account_id">
+          <el-select v-model="publishForm.account_id" placeholder="请选择发布账号" style="width: 100%">
+            <el-option
+              v-for="acc in accounts"
+              :key="acc.id"
+              :label="acc.account_name + (acc.is_default ? ' (默认)' : '')"
+              :value="acc.id"
+              :disabled="!acc.cookie_valid"
+            />
+          </el-select>
+        </el-form-item>
+
         <el-form-item label="标题" prop="title">
           <el-input v-model="publishForm.title" maxlength="80" show-word-limit placeholder="请输入视频标题" />
         </el-form-item>
@@ -136,6 +152,27 @@
           </el-select>
         </el-form-item>
 
+        <el-form-item label="封面" prop="cover_url">
+          <el-upload
+            class="cover-uploader"
+            action="#"
+            :show-file-list="false"
+            :http-request="handleCoverUpload"
+            :before-upload="beforeCoverUpload"
+          >
+            <div v-if="publishForm.cover_url" class="cover-preview">
+              <img :src="getCoverUrl(publishForm.cover_url)" class="cover-image" />
+              <div class="cover-actions" @click.stop>
+                <el-button type="danger" circle size="small" @click="clearCover">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </div>
+            </div>
+            <el-icon v-else class="cover-uploader-icon"><Plus /></el-icon>
+          </el-upload>
+          <div class="form-tip">支持jpg/png格式，建议尺寸16:9，不传则使用视频默认封面</div>
+        </el-form-item>
+
         <el-form-item label="标签" prop="tag">
           <el-input v-model="publishForm.tag" placeholder="多个标签用逗号分隔,最多10个" />
         </el-form-item>
@@ -153,10 +190,14 @@
 
         <el-form-item label="上传线路" prop="upload_line">
           <el-select v-model="publishForm.upload_line" style="width: 100%">
-            <el-option label="七牛云 (kodo)" value="kodo" />
             <el-option label="百度云 (bda2)" value="bda2" />
-            <el-option label="腾讯云 (qn)" value="qn" />
             <el-option label="网宿 (ws)" value="ws" />
+            <el-option label="腾讯云 (qn)" value="qn" />
+            <el-option label="百度云SA (bldsa)" value="bldsa" />
+            <el-option label="腾讯云 (tx)" value="tx" />
+            <el-option label="腾讯云A (txa)" value="txa" />
+            <el-option label="百度云 (bda)" value="bda" />
+            <el-option label="阿里云 (alia)" value="alia" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -172,54 +213,55 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Promotion, User, CircleCheck, Clock, Calendar, Upload } from '@element-plus/icons-vue'
+import { Promotion, User, CircleCheck, Clock, Calendar, Upload, Refresh, Plus, Delete } from '@element-plus/icons-vue' // Added Plus, Delete
 import bilibiliService from '@/services/bilibili'
+import { uploadService } from '@/services/upload' // Import uploadService
 
+const router = useRouter()
 const activeTab = ref('videos')
 const videos = ref([])
 const tasks = ref([])
+const accounts = ref([])
 const videosLoading = ref(false)
 const tasksLoading = ref(false)
-const loginLoading = ref(false)
 const publishing = ref(false)
 const publishDialogVisible = ref(false)
 const publishFormRef = ref(null)
 const tidOptions = ref([])
 const currentVideo = ref(null)
-
-const accountStatus = ref({
-  logged_in: false,
-  account_name: '',
-  last_login_at: null,
-  message: ''
-})
+const retryingTaskId = ref(null) // Added state
+const coverPreviewUrl = ref('') // Added for cover preview
 
 const publishForm = reactive({
   video_task_id: '',
+  account_id: '',
   title: '',
   desc: '',
   tid: 171,
   tag: '',
   copyright: 1,
   source: '',
-  upload_line: 'kodo',
+  cover_url: '', // Added cover_url
+  upload_line: 'bda2',
   upload_limit: 3
 })
 
 const publishRules = {
+  account_id: [{ required: true, message: '请选择发布账号', trigger: 'change' }],
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
   tid: [{ required: true, message: '请选择分区', trigger: 'change' }]
 }
 
-// 加载账号状态
-const loadAccountStatus = async () => {
+
+// 加载账号列表
+const loadAccounts = async () => {
   try {
-    const res = await bilibiliService.getAccountStatus()
-    accountStatus.value = res
+    accounts.value = await bilibiliService.getAccounts()
   } catch (error) {
-    console.error('获取账号状态失败:', error)
+    console.error('获取账号列表失败:', error)
   }
 }
 
@@ -249,6 +291,12 @@ const loadTasks = async () => {
   }
 }
 
+// 刷新所有数据
+const handleRefresh = async () => {
+  await Promise.all([loadVideos(), loadTasks()])
+  ElMessage.success('刷新成功')
+}
+
 // 加载分区选项
 const loadTidOptions = async () => {
   try {
@@ -258,28 +306,16 @@ const loadTidOptions = async () => {
   }
 }
 
-// 登录B站
-const handleLogin = async () => {
-  loginLoading.value = true
-  try {
-    const res = await bilibiliService.loginByQrcode()
-    if (res.success) {
-      ElMessage.success('登录成功')
-      await loadAccountStatus()
-    } else {
-      ElMessage.error(res.message || '登录失败')
-    }
-  } catch (error) {
-    ElMessage.error('登录失败')
-  } finally {
-    loginLoading.value = false
-  }
+// 跳转到账号管理
+const goToAccountManagement = () => {
+  router.push('/bilibili-accounts')
 }
 
 // 打开发布对话框
 const handlePublish = (video) => {
-  if (!accountStatus.value.logged_in) {
-    ElMessage.warning('请先登录B站账号')
+  if (accounts.value.length === 0) {
+    ElMessage.warning('请先添加B站账号')
+    goToAccountManagement()
     return
   }
 
@@ -287,7 +323,81 @@ const handlePublish = (video) => {
   publishForm.video_task_id = video.id
   publishForm.title = `${video.project_title} - ${video.chapter_title}`
   publishForm.desc = ''
+  
+  // 默认选中默认账号
+  const defaultAccount = accounts.value.find(a => a.is_default && a.cookie_valid)
+  // 如果没有默认账号，或者默认账号无效，则选第一个有效的
+  const validAccount = defaultAccount || accounts.value.find(a => a.cookie_valid)
+  publishForm.account_id = validAccount ? validAccount.id : ''
+  
   publishDialogVisible.value = true
+}
+
+// 重试任务
+const handleRetry = async (task) => {
+  retryingTaskId.value = task.id
+  try {
+    const res = await bilibiliService.retryTask(task.id)
+    if (res.success) {
+      ElMessage.success('重试任务已提交')
+      await loadTasks()
+    } else {
+      ElMessage.error(res.message || '重试失败')
+    }
+  } catch (error) {
+    ElMessage.error('重试失败')
+  } finally {
+    retryingTaskId.value = null
+  }
+}
+
+// 封面上传前检查
+const beforeCoverUpload = (file) => {
+  const isJPGOrPNG = file.type === 'image/jpeg' || file.type === 'image/png'
+  const isLt5M = file.size / 1024 / 1024 < 5
+
+  if (!isJPGOrPNG) {
+    ElMessage.error('封面图片只能是 JPG/PNG 格式!')
+  }
+  if (!isLt5M) {
+    ElMessage.error('封面图片大小不能超过 5MB!')
+  }
+  return isJPGOrPNG && isLt5M
+}
+
+// 处理封面上传
+const handleCoverUpload = async (options) => {
+  const formData = new FormData()
+  formData.append('file', options.file)
+  
+  // 生成本地预览
+  coverPreviewUrl.value = URL.createObjectURL(options.file)
+  
+  try {
+    const res = await uploadService.uploadFile({ formData })
+    if (res.success) {
+      // 保存对象键
+      publishForm.cover_url = res.data.storage_key
+      ElMessage.success('封面上传成功')
+    } else {
+      ElMessage.error('封面上传失败')
+    }
+  } catch (error) {
+    ElMessage.error('封面上传失败')
+    console.error(error)
+  }
+}
+
+const getCoverUrl = (url) => {
+  if (coverPreviewUrl.value) return coverPreviewUrl.value
+  if (url && url.startsWith('http')) return url
+  return '' // 无法预览对象键
+}
+
+// 清除封面
+const clearCover = () => {
+  publishForm.cover_url = ''
+  coverPreviewUrl.value = ''
 }
 
 // 提交发布
@@ -357,7 +467,7 @@ const getStatusText = (status) => {
 
 onMounted(async () => {
   await Promise.all([
-    loadAccountStatus(),
+    loadAccounts(),
     loadVideos(),
     loadTasks(),
     loadTidOptions()
@@ -550,6 +660,75 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.cover-uploader {
+  border: 1px dashed var(--border-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: var(--el-transition-duration-fast);
+  width: 178px;
+  height: 100px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.cover-uploader:hover {
+  border-color: var(--primary-color);
+}
+
+.cover-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 178px;
+  height: 100px;
+  text-align: center;
+}
+
+.cover-preview {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-actions {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.cover-preview:hover .cover-actions {
+  opacity: 1;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.header-left .header-right {
+  display: flex;
+  gap: 12px;
 }
 
 .bv-link {

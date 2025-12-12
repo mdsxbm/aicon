@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class PublishRequest(BaseModel):
     """发布请求"""
     video_task_id: str = Field(..., description="视频任务ID")
+    account_id: Optional[str] = Field(None, description="使用的B站账号ID")
     title: str = Field(..., min_length=1, max_length=80, description="视频标题")
     desc: str = Field("", max_length=2000, description="视频简介")
     tid: int = Field(171, description="投稿分区ID")
@@ -20,7 +21,7 @@ class PublishRequest(BaseModel):
     dynamic: str = Field("", max_length=233, description="空间动态")
     cover_url: str = Field("", description="封面URL")
     dtime: Optional[int] = Field(None, description="延时发布时间戳")
-    upload_line: str = Field("kodo", description="上传线路: kodo/bda2/qn/ws")
+    upload_line: str = Field("bda2", description="上传线路: bda2/ws/qn/bldsa/tx/txa/bda/alia")
     upload_limit: int = Field(3, ge=1, le=10, description="并发数")
 
 
