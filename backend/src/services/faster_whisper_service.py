@@ -8,7 +8,7 @@ logger = get_logger(__name__)
 
 
 class WhisperTranscriptionService:
-    def __init__(self, model_size="medium", device="cuda", compute_type="float32"):
+    def __init__(self, model_size="small", device="cpu", compute_type="float32"):
         """
         初始化语音识别服务（可复用模型，不需要每次都加载）
         """

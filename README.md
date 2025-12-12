@@ -10,7 +10,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Vue](https://img.shields.io/badge/Vue-3.3+-4FC08D.svg)](https://vuejs.org/)
 
-[功能演示](#-产品演示) • [功能特性](#-核心功能) • [快速开始](#-快速开始) • [技术架构](#-技术架构)
+[功能演示](#-产品演示) • [功能特性](#-核心功能) • [快速开始](#-快速开始) • [文档](#-文档)
 
 </div>
 
@@ -79,7 +79,7 @@
 <tr>
 <td width="50%">
 
-#### 📂 项目与章节管理
+#### 📝 文本导入项目 🆕
 - ✅ 支持TXT、DOCX、PDF、EPUB等多格式
 - ✅ 智能章节识别与解析
 - ✅ 可视化章节编辑器
@@ -139,8 +139,6 @@
 
 ### 🎬 专业视频合成
 
-#### 🎥 视频生成特性
-
 | 功能 | 说明 | 配置项 |
 |------|------|--------|
 | **分辨率** | 竖屏(9:16)、横屏(16:9)、方形(1:1) | ✅ 可配置 |
@@ -151,27 +149,39 @@
 | **视频加速** | 0.5x-2.0x速度调整，保持音调 | ✅ 可配置 |
 | **LLM纠错** | 智能修正字幕错别字 | ✅ 可选启用 |
 
-#### 🔧 技术亮点
+### 📤 导出与发布 🆕
 
-```mermaid
-graph LR
-    A[文本] --> B[章节识别]
-    B --> C[提示词生成]
-    C --> D[图片生成]
-    C --> E[音频生成]
-    D --> F[单句视频合成]
-    E --> F
-    F --> G[视频拼接]
-    G --> H[视频加速]
-    H --> I[BGM混合]
-    I --> J[最终视频]
-```
+<table>
+<tr>
+<td width="33%">
 
-**关键优化**：
-- ✅ **字幕同步保护**：严格验证LLM纠错词数，防止时间轴错位
-- ✅ **高效加速策略**：在最终视频应用速度，避免单句重复编码
-- ✅ **智能BGM处理**：自动循环短BGM，截断长BGM
-- ✅ **增量缓存**：已生成的图片和音频智能复用
+#### 🎬 剪映素材导出
+- ✅ 一键导出剪映草稿格式
+- ✅ 包含所有图片和音频素材
+- ✅ 支持直接导入剪映专业版
+- ✅ 完整的时间轴配置
+
+</td>
+<td width="33%">
+
+#### 📺 B站账号管理
+- ✅ 扫码登录B站账号
+- ✅ 多账号管理
+- ✅ Cookie自动维护
+- ✅ 登录状态监控
+
+</td>
+<td width="33%">
+
+#### 🚀 B站稿件发布
+- ✅ 视频一键发布到B站
+- ✅ 自定义分区、标签、封面
+- ✅ 发布状态追踪
+- ✅ 批量发布支持
+
+</td>
+</tr>
+</table>
 
 ### 🔐 API密钥管理
 
@@ -179,13 +189,6 @@ graph LR
 - ✅ 多密钥配置与切换
 - ✅ 密钥状态监控
 - ✅ 用量统计（即将推出）
-
-### 📦 BGM资源管理
-
-- ✅ BGM上传与管理
-- ✅ 音频时长自动识别
-- ✅ 预签名URL访问
-- ✅ 批量删除
 
 ---
 
@@ -212,201 +215,44 @@ graph LR
 2. **[低成本] 第三方中转平台** (Sora_Image)
    - 注册链接：[https://api.vectorengine.ai/register?aff=YVx7](https://api.vectorengine.ai/register?aff=YVx7)
    - 用途：低成本图片生成（约0.04元/张）
-   - ⚠️ **注意**：按需充值，用多少充多少
 
-### 📦 安装步骤
-
-#### 1. 安装系统依赖
-
-**FFmpeg (视频处理核心)**
+### 📦 快速安装
 
 ```bash
-# Windows (Chocolatey)
-choco install ffmpeg
+# 1. 克隆项目
+git clone https://github.com/869413421/aicon2.git
+cd aicon2
 
-# Windows (Scoop)
-scoop install ffmpeg
-
-# macOS
-brew install ffmpeg
-
-# Ubuntu/Debian
-sudo apt update && sudo apt install ffmpeg
-
-# CentOS/RHEL
-sudo yum install epel-release && sudo yum install ffmpeg
-```
-
-**uv (Python包管理器)**
-
-```bash
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 或使用pip
-pip install uv
-```
-
-#### 2. 配置环境变量
-
-```bash
-# 复制环境变量模板
+# 2. 配置环境变量
 cp .env.example .env
+# 编辑.env文件，填入必要配置
 
-# 编辑.env文件，填入配置
-# - API密钥
-# - 数据库连接
-# - MinIO配置
-# 等
-```
+# 3. 启动基础设施（PostgreSQL, Redis, MinIO）
+docker-compose up -d
 
-#### 3. 启动服务
-
-**方式一：一键启动（推荐）**
-
-```bash
-# 1. 启动基础设施 (PostgreSQL, Redis, MinIO)
-./scripts/start.sh
-
-# 2. 启动后端API服务（新终端）
+# 4. 启动后端
 cd backend
 uv sync
 alembic upgrade head
 uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
-# 3. 启动Celery Worker（新终端）
+# 5. 启动Celery Worker（新终端）
 cd backend
 uv run celery -A src.tasks.task worker --loglevel=info
 
-# 4. 启动前端服务（新终端）
+# 6. 启动前端（新终端）
 cd frontend
 npm install
 npm run dev
 ```
 
-**方式二：Docker Compose**
-
-```bash
-# 启动所有服务
-docker-compose up -d
-
-# 查看服务状态
-docker-compose ps
-
-# 查看日志
-docker-compose logs -f
-```
-
-#### 4. 验证安装
+### ✅ 验证安装
 
 访问以下地址确认服务正常:
 
 - 🌐 **前端应用**: http://localhost:3000
 - 📚 **API文档**: http://localhost:8000/docs
 - 📦 **MinIO控制台**: http://localhost:9001 (minioadmin/minioadmin123)
-
-#### 5. GPU加速配置 (可选)
-
-如果您有NVIDIA GPU并希望加速视频字幕生成(faster-whisper),可以启用GPU支持:
-
-**适用环境**: Linux / WSL
-
-**前置条件**:
-- NVIDIA GPU (支持CUDA)
-- 已安装CUDA驱动
-- 当前项目安装命令 `uv pip install .[gpu] -i https://pypi.tuna.tsinghua.edu.cn/simple`
-
-**配置步骤**:
-
-1. **设置CUDA动态库路径**
-
-   激活虚拟环境后,设置环境变量:
-   ```bash
-   source .venv/bin/activate
-   export LD_LIBRARY_PATH="<PROJECT_PATH>/.venv/lib/python3.12/site-packages/nvidia/cublas/lib:<PROJECT_PATH>/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH"
-   ```
-   
-   将 `<PROJECT_PATH>` 替换为实际项目路径。
-
-2. **自动加载配置 (推荐)**
-
-   将以下内容追加到 `.venv/bin/activate`,每次激活虚拟环境自动启用GPU:
-   ```bash
-   export LD_LIBRARY_PATH="<PROJECT_PATH>/.venv/lib/python3.12/site-packages/nvidia/cublas/lib:<PROJECT_PATH>/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH"
-   ```
-
-3. **修改Whisper服务配置**
-
-   编辑 `backend/src/services/faster_whisper_service.py`:
-   ```python
-   class WhisperTranscriptionService:
-       def __init__(self, model_size="small", device="cuda", compute_type="float32"):
-           """初始化语音识别服务"""
-           logger.info(f"🔄 正在加载 Whisper 模型: {model_size} ...")
-           self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
-           self.cc = OpenCC("t2s")
-           logger.info(f"✅ 模型加载完成")
-   ```
-   
-   将 `device` 参数从 `"cpu"` 改为 `"cuda"`,`model_size` 可根据显存调整(tiny/base/small/medium/large)。
-
-**性能提升**: GPU加速可将字幕生成速度提升3-10倍,具体取决于GPU型号。
-
-#### 6. Bilibili发布工具配置 (可选)
-
-如果需要将生成的视频发布到Bilibili,需要部署biliup-rs工具:
-
-**下载biliup-rs**:
-
-```bash
-# Linux/WSL
-cd backend
-mkdir -p bin
-cd bin
-
-# 下载 v0.2.4 的压缩包
-wget https://github.com/biliup/biliup-rs/releases/download/v0.2.4/biliupR-v0.2.4-x86_64-linux.tar.xz
-
-# 解压
-tar -xvf biliupR-v0.2.4-x86_64-linux.tar.xz
-
-# 解压后会包含 biliup 可执行文件，将其移动并赋权
-mv biliupR-v0.2.4-x86_64-linux/biliup biliup
-chmod +x biliup
-
-
-# Windows (PowerShell)
-cd backend
-New-Item -ItemType Directory -Force -Path bin
-cd bin
-
-# 手动下载 v0.2.4 Windows 版本：
-# https://github.com/biliup/biliup-rs/releases/download/v0.2.4/biliupR-v0.2.4-x86_64-windows.zip
-```
-
-**创建Cookie存储目录**:
-
-```bash
-cd backend
-mkdir -p data/bilibili_cookies
-```
-
-**验证安装**:
-
-```bash
-# Linux/WSL
-./bin/biliup --version
-
-# Windows
-.\bin\biliup.exe --version
-```
-
-**使用说明**:
-1. 通过API `/api/v1/bilibili/login/qrcode` 扫码登录B站
-2. 调用 `/api/v1/bilibili/publish` 发布视频到B站
-3. 支持自定义分区、标签、封面等配置
-
-详细文档参见: [Bilibili发布集成方案](docs/bilibili_integration_plan.md)
 
 ---
 
@@ -436,69 +282,14 @@ Vue 3 + Element Plus + Pinia + Vite
 - **Pinia**: 状态管理
 - **Vite**: 下一代前端构建工具
 
-### 项目结构
-
-```
-aicon2/
-├── backend/                 # Python/FastAPI后端
-│   ├── src/
-│   │   ├── api/            # API路由
-│   │   ├── models/         # 数据模型
-│   │   ├── services/       # 业务逻辑
-│   │   ├── tasks/          # Celery任务
-│   │   └── utils/          # 工具函数
-│   ├── alembic/            # 数据库迁移
-│   └── tests/              # 测试
-├── frontend/               # Vue.js前端
-│   ├── src/
-│   │   ├── components/     # Vue组件
-│   │   ├── composables/    # 组合式API
-│   │   ├── services/       # API服务
-│   │   ├── stores/         # Pinia状态
-│   │   └── views/          # 页面视图
-│   └── public/             # 静态资源
-├── docs/                   # 文档与媒体资源
-│   └── media/              # 产品演示GIF
-├── scripts/                # 运维脚本
-├── docker-compose.yml      # Docker编排
-└── .env.example           # 环境变量模板
-```
-
 ---
 
-## 📖 使用指南
+## 📖 文档
 
-### 1. 项目管理
-- 上传文本文件（TXT/DOCX/PDF/EPUB）
-- 自动章节识别与解析
-- 编辑章节内容
-
-### 2. 素材生成
-- 配置API密钥
-- 批量生成提示词
-- 批量生成图片和音频
-- 预览与调整
-
-### 3. 视频合成
-- 配置视频参数（分辨率、帧率、字幕样式）
-- 选择BGM（可选）
-- 设置视频速度
-- 启用LLM字幕纠错（可选）
-- 一键生成视频
-
----
-
-## 🔧 常用命令
-
-| 命令 | 描述 |
-|------|------|
-| `docker-compose up -d` | 启动基础设施 |
-| `docker-compose down` | 停止基础设施 |
-| `docker-compose logs -f` | 查看日志 |
-| `cd backend && uv sync` | 安装Python依赖 |
-| `cd backend && alembic upgrade head` | 数据库迁移 |
-| `cd frontend && npm install` | 安装Node依赖 |
-| `cd frontend && npm run dev` | 启动前端开发服务器 |
+- 📦 **[安装部署指南](docs/INSTALLATION.md)** - 详细的安装步骤、GPU加速配置、Bilibili工具配置
+- 💻 **[开发指南](docs/DEVELOPMENT.md)** - 项目结构、开发环境、代码规范、测试指南
+- ✨ **[功能详细说明](docs/FEATURES.md)** - 各功能模块的详细介绍和使用教程
+- 📺 **[Bilibili集成方案](docs/bilibili_integration_plan.md)** - B站发布功能的技术方案
 
 ---
 
@@ -536,6 +327,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 - [FFmpeg](https://ffmpeg.org/)
 - [Celery](https://docs.celeryq.dev/)
 - [硅基流动](https://cloud.siliconflow.cn/)
+- [biliup-rs](https://github.com/biliup/biliup-rs)
 
 ---
 
