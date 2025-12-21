@@ -80,14 +80,10 @@ class MovieCharacterService(SessionManagedService):
                 base_url=api_key.base_url
             )
 
-            model_name = model or "deepseek-v3-250324"
-            # 简化的模型选择逻辑
-            if api_key.provider == "deepseek": model_name = "deepseek-chat"
-
             try:
                 prompt = self.EXTRACT_CHARACTERS_PROMPT.format(text=script_text[:5000]) # 限制长度
                 response = await llm_provider.completions(
-                    model=model_name,
+                    model=model,
                     messages=[
                         {"role": "system", "content": "你是一个专业的选角导演JSON生成器。"},
                         {"role": "user", "content": prompt},
@@ -129,13 +125,6 @@ class MovieCharacterService(SessionManagedService):
                 logger.error(f"提取角色失败: {e}")
                 raise
     
-    STYLE_MAP = {
-        "cinematic": "Cinematic lighting, movie still, 8k, photorealistic, dramatic, highly detailed face",
-        "anime": "Anime style, vibrant colors, detailed line art, digital illustration, clean lines",
-        "cyberpunk": "Cyberpunk style, neon lights, high tech low life, futuristic atmosphere, blue and pink lighting",
-        "oil_painting": "Oil painting style, brush strokes, classical art, rich colors, textured canvas"
-    }
-
     async def generate_character_avatar(self, character_id: str, api_key_id: str, model: str = None, prompt: str = None, style: str = "cinematic") -> str:
         """
         生成角色头像/定妆照

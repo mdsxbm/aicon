@@ -120,7 +120,9 @@ async def _produce_one_shot_worker(
             all_raw_images = [shot.first_frame_url]
             if shot.last_frame_url:
                 all_raw_images.append(shot.last_frame_url)
-            all_raw_images.extend(ref_images)
+                
+            # 角色参考图
+            # all_raw_images.extend(ref_images)
             
             all_signed_images = []
             for img in all_raw_images:
@@ -189,8 +191,9 @@ class MovieProductionService(SessionManagedService):
         user_content = f"Visual Description: {visual_desc}\nCamera Movement: {camera_movement or 'None'}\nPerformance/Action: {performance_prompt or 'None'}\nDialogue: {dialogue or 'None'}"
         
         try:
+            logger.info("创建提示词，调用 LLM Provider")
             response = await llm_provider.completions(
-                model="deepseek-chat",
+                model="gemini-3-flash-preview",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content},
@@ -446,6 +449,16 @@ if __name__ == "__main__":
         service = MovieProductionService()
         result = await service.sync_all_video_tasks()
         print(result)
+        
+    async def test_shot():
+        service = MovieProductionService()
+        result = await service.produce_shot_video(
+            shot_id="5c105e52-ba09-4109-83be-aae113aeaa04",
+            api_key_id="457f4337-8f54-4749-a2d6-78e1febf9028",
+            model="veo_3_1-fast",
+            force=True
+        )
+        print(result)
 
-
+    # asyncio.run(test_shot())
     asyncio.run(test())
