@@ -5,9 +5,16 @@
 import asyncio
 import base64
 import httpx
-from typing import Optional, List
+import uuid
+import io
+from typing import Optional, List, Any
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload, selectinload
+from fastapi import UploadFile
+
 from src.core.logging import get_logger
 from src.models.movie import MovieShot, MovieScene, MovieScript, MovieCharacter
+from src.models.chapter import Chapter
 from src.services.base import SessionManagedService
 from src.services.provider.factory import ProviderFactory
 from src.services.api_key import APIKeyService
@@ -17,6 +24,112 @@ from src.utils.storage import storage_client
 from datetime import timedelta
 
 logger = get_logger(__name__)
+
+# ============================================================
+# 独立 Worker 函数 (参照 image.py 规范)
+# ============================================================
+
+async def _sync_one_shot_worker(
+    shot: MovieShot,
+    api_key,
+    semaphore: asyncio.Semaphore
+):
+    """
+    单个镜头的同步 Worker - 不负责数据库 IO，只负责状态查询和内存更新
+    """
+    async with semaphore:
+        try:
+            vector_provider = ProviderFactory.create(
+                provider="vectorengine", 
+                api_key=api_key.get_api_key(),
+                base_url=api_key.base_url
+            )
+            
+            status_resp = await vector_provider.get_task_status(shot.video_task_id) # type: ignore
+            status = status_resp.get("status")
+            
+            if status == "completed":
+                content_resp = await vector_provider.get_video_content(shot.video_task_id) # type: ignore
+                shot.video_url = content_resp.get("video_url")
+                shot.status = "completed"
+                shot.last_error = None
+            elif status == "failed":
+                shot.status = "failed"
+                shot.last_error = status_resp.get("error") or "Vector Engine 任务失败"
+            
+            return True
+        except Exception as e:
+            logger.error(f"Worker 同步异常 [shot_id={shot.id}]: {e}")
+            if "not found" in str(e).lower():
+                shot.status = "failed"
+                shot.last_error = "任务不存在"
+            return False
+
+async def _produce_one_shot_worker(
+    shot: MovieShot,
+    owner_id: str,
+    api_key,
+    ref_images: List[str],
+    model: str,
+    semaphore: asyncio.Semaphore,
+    llm_provider,
+    service_instance
+):
+    """
+    单个镜头的生产 Worker
+    """
+    async with semaphore:
+        try:
+            # 1. 生成提示词 (如果需要)
+            if not shot.video_prompt:
+                shot.video_prompt = await service_instance._polish_prompt_to_english_with_provider(
+                    llm_provider,
+                    shot.visual_description,
+                    shot.camera_movement,
+                    shot.performance_prompt,
+                    shot.dialogue
+                )
+
+            # 2. 预签名图片 URL (首帧 + 尾帧 + 角色参考)
+            all_raw_images = [shot.first_frame_url]
+            if shot.last_frame_url:
+                all_raw_images.append(shot.last_frame_url)
+            all_raw_images.extend(ref_images)
+            
+            all_signed_images = []
+            for img in all_raw_images:
+                if img and not img.startswith("http"):
+                    all_signed_images.append(storage_client.get_presigned_url(img, timedelta(hours=24)))
+                else:
+                    all_signed_images.append(img)
+
+            # 3. 转换为 Base64
+            all_base64_images = await asyncio.gather(*[service_instance._to_base64(url) for url in all_signed_images])
+
+            # 4. 提交到 Vector Engine
+            vector_provider = ProviderFactory.create(
+                provider="vectorengine",
+                api_key=api_key.get_api_key(),
+                base_url=api_key.base_url
+            )
+
+            shot.status = "processing"
+            task_resp = await vector_provider.create_video( # type: ignore
+                prompt=shot.video_prompt,
+                images=all_base64_images,
+                model=model,
+                use_character_ref=True if ref_images else False
+            )
+            
+            shot.video_task_id = task_resp.get("id")
+            shot.last_error = None
+            return True
+        except Exception as e:
+            logger.error(f"Worker 生产异常 [shot_id={shot.id}]: {e}")
+            shot.status = "failed"
+            shot.last_error = str(e)
+            return False
+
 
 class MovieProductionService(SessionManagedService):
     """
@@ -35,21 +148,12 @@ class MovieProductionService(SessionManagedService):
                 return f"data:image/png;base64,{encoded}"
         except Exception as e:
             logger.error(f"Failed to convert image to base64: {e}")
-            return image_url # 兜底返回原 URL
+            return image_url
 
-    async def _polish_prompt_to_english(self, api_key_id: str, owner_id: str, visual_desc: str, camera_movement: Optional[str] = None, performance_prompt: Optional[str] = None, dialogue: Optional[str] = None) -> str:
+    async def _polish_prompt_to_english_with_provider(self, llm_provider, visual_desc: str, camera_movement: Optional[str] = None, performance_prompt: Optional[str] = None, dialogue: Optional[str] = None) -> str:
         """
-        将中文描述转换为高质量的英文视频提示词，并附加字幕指令
+        内部逻辑：使用已创建的 Provider 优化提示词
         """
-        api_key_service = APIKeyService(self.db_session)
-        api_key = await api_key_service.get_api_key_by_id(api_key_id, owner_id)
-        
-        llm_provider = ProviderFactory.create(
-            provider=api_key.provider,
-            api_key=api_key.get_api_key(),
-            base_url=api_key.base_url
-        )
-
         system_prompt = (
             "You are a professional AI video prompt engineer. Translate and polish the given scene description into a high-quality, detailed English prompt for video generation.\n"
             "CRITICAL: If 'Dialogue' is provided, you MUST append a specific instruction at the end of the prompt to render bilingual subtitles at the bottom of the video.\n"
@@ -68,7 +172,6 @@ class MovieProductionService(SessionManagedService):
             )
             polished_prompt = response.choices[0].message.content.strip()
             
-            # 确保字幕指令存在（如果 LLM 没生成，手动兜底）
             if dialogue and "subtitles" not in polished_prompt.lower():
                 polished_prompt += f" Display bilingual subtitles at the bottom: '{dialogue} / [Translation]'"
                 
@@ -76,6 +179,19 @@ class MovieProductionService(SessionManagedService):
         except Exception as e:
             logger.error(f"Prompt polishing failed: {e}")
             return f"{visual_desc}. {camera_movement or ''}. {performance_prompt or ''}"
+
+    async def _polish_prompt_to_english(self, api_key_id: str, owner_id: str, visual_desc: str, camera_movement: Optional[str] = None, performance_prompt: Optional[str] = None, dialogue: Optional[str] = None) -> str:
+        """
+        [DEPRECATED] 兼容性方法，内部转调 _polish_prompt_to_english_with_provider
+        """
+        api_key_service = APIKeyService(self.db_session)
+        api_key = await api_key_service.get_api_key_by_id(api_key_id, owner_id)
+        llm_provider = ProviderFactory.create(
+            provider=api_key.provider,
+            api_key=api_key.get_api_key(),
+            base_url=api_key.base_url
+        )
+        return await self._polish_prompt_to_english_with_provider(llm_provider, visual_desc, camera_movement, performance_prompt, dialogue)
 
     async def produce_shot_video(self, shot_id: str, api_key_id: str, model: str = "veo_3_1-fast", force: bool = False) -> str:
         """
@@ -85,167 +201,136 @@ class MovieProductionService(SessionManagedService):
             raise ValueError("必须提供 api_key_id")
             
         async with self:
-            shot = await self.db_session.get(MovieShot, shot_id)
+            stmt = select(MovieShot).where(MovieShot.id == shot_id).options(
+                joinedload(MovieShot.scene).joinedload(MovieScene.script).joinedload(MovieScript.chapter).joinedload(Chapter.project)
+            )
+            shot = (await self.db_session.execute(stmt)).scalars().first()
             if not shot: raise ValueError("分镜不存在")
             
             # 1. 强制依赖检查：必须有首帧
             if not shot.first_frame_url:
                 raise ValueError(f"分镜 {shot_id} 缺少首帧图，请先生成首帧")
 
-            # 已经生成过且不强制重制，则返回
             if shot.video_url and not force:
                 return shot.video_task_id or "completed"
 
-            # 2. 准备对话表现 (如果需要)
+            # 2. 准备资料
+            project_id = shot.scene.script.chapter.project_id
+            owner_id = str(shot.scene.script.chapter.project.owner_id)
+            
+            # 3. 预加载相关信息 (如果需要设计表演提示词)
             if shot.dialogue and not shot.performance_prompt:
                 await dialogue_prompt_engine.design_performance_prompt(shot_id, None, api_key_id)
                 await self.db_session.refresh(shot)
 
-            # 3. 收集项目信息和角色一致性参考图 (使用 joinedload 避免异步环境下的 lazy load 异常)
-            from src.models.chapter import Chapter
-            from src.models.project import Project
-            from sqlalchemy import select
-            from sqlalchemy.orm import joinedload
-            
-            stmt = select(Chapter).join(MovieScript).join(MovieScene).where(MovieScene.id == shot.scene_id).options(joinedload(Chapter.project))
-            result = await self.db_session.execute(stmt)
-            chapter = result.scalars().first()
-            if not chapter: raise ValueError("无法找到分镜关联的章节")
-            
-            project_id = chapter.project_id
-            owner_id = str(chapter.project.owner_id) if chapter.project else None
-            if not owner_id:
-                 # 兜底查询 owner_id
-                 from src.models.project import Project
-                 project = await self.db_session.get(Project, project_id)
-                 owner_id = str(project.owner_id)
-
+            # 4. 收集角色一致性参考图
             stmt_chars = select(MovieCharacter).where(MovieCharacter.project_id == project_id)
             all_chars = (await self.db_session.execute(stmt_chars)).scalars().all()
             
             ref_images = []
             for char in all_chars:
-                # 检查角色是否在描述中被提及，或者通过对话关联
                 if char.name in shot.visual_description:
-                    if not char.avatar_url:
-                        raise ValueError(f"角色 {char.name} 缺少形象，请先生成角色形象")
-                    ref_images.append(char.avatar_url)
-                    if char.reference_images:
-                        ref_images.extend(char.reference_images)
-            
+                    if char.avatar_url: ref_images.append(char.avatar_url)
+                    if char.reference_images: ref_images.extend(char.reference_images)
             ref_images = list(dict.fromkeys(ref_images))[:3]
 
-            # 4. 生成英文提示词并保存
-            final_english_prompt = await self._polish_prompt_to_english(
-                api_key_id, owner_id, 
-                shot.visual_description, 
-                shot.camera_movement, 
-                shot.performance_prompt,
-                shot.dialogue
-            )
-            shot.video_prompt = final_english_prompt
-
-            # 5. 提交到 Vector Engine
+            # 5. API Provider
             api_key_service = APIKeyService(self.db_session)
             api_key = await api_key_service.get_api_key_by_id(api_key_id, owner_id)
-
-            vector_provider = ProviderFactory.create(
-                provider="vectorengine",
+            llm_provider = ProviderFactory.create(
+                provider=api_key.provider,
                 api_key=api_key.get_api_key(),
                 base_url=api_key.base_url
             )
 
-            # 预签名图片 URL (首帧 + 尾帧 + 角色参考)
-            all_raw_images = [shot.first_frame_url]
-            if shot.last_frame_url:
-                all_raw_images.append(shot.last_frame_url)
-            all_raw_images.extend(ref_images)
+            # 6. 利用 Worker 逻辑执行
+            # 这里虽然是单镜头，但也使用 worker 逻辑以保持一致性
+            semaphore = asyncio.Semaphore(1)
+            shot.api_key_id = api_key_id
+            success = await _produce_one_shot_worker(
+                shot, owner_id, api_key, ref_images, model, semaphore, llm_provider, self
+            )
             
-            logger.info(f"准备提交视频生成: shot_id={shot_id}, refs={len(ref_images)}")
-            
-            all_signed_images = []
-            for img in all_raw_images:
-                if img and not img.startswith("http"):
-                    all_signed_images.append(storage_client.get_presigned_url(img, timedelta(hours=24)))
-                else:
-                    all_signed_images.append(img)
-
-            # 转换为 Base64 (用户要求)
-            logger.info(f"转换图片为 Base64...")
-            all_base64_images = await asyncio.gather(*[self._to_base64(url) for url in all_signed_images])
-
-            try:
-                shot.status = "processing"
-                shot.api_key_id = api_key_id
-                await self.db_session.flush()
-
-                logger.info(f"正在调用 Vector Provider: model={model}, images={len(all_base64_images)}")
-                task_resp = await vector_provider.create_video( # type: ignore
-                    prompt=final_english_prompt,
-                    images=all_base64_images,
-                    model=model,
-                    use_character_ref=True if ref_images else False
-                )
-                
-                shot.video_task_id = task_resp.get("id")
-                logger.info(f"Vector Engine 已返回任务 ID: {shot.video_task_id}")
+            if success:
                 await self.db_session.commit()
                 return shot.video_task_id # type: ignore
-                
-            except Exception as e:
-                shot.status = "failed"
+            else:
                 await self.db_session.commit()
-                logger.error(f"提交 Vector Engine 失败 [shot_id={shot_id}]: {e}")
-                raise
+                raise Exception(shot.last_error or "视频生产提交失败")
 
     async def batch_produce_shot_videos(self, script_id: str, api_key_id: str, model: str = "veo_3_1-fast") -> dict:
         """
-        批量生产剧本下的分镜视频
+        批量生产剧本下的分镜视频 (参考 image.py)
         """
         if not api_key_id:
             raise ValueError("必须提供 api_key_id")
 
         async with self:
-            from sqlalchemy.orm import selectinload
+            # 1. 深度加载剧本结构
             script = await self.db_session.get(MovieScript, script_id, options=[
-                selectinload(MovieScript.scenes).selectinload(MovieScene.shots)
+                selectinload(MovieScript.scenes).selectinload(MovieScene.shots),
+                joinedload(MovieScript.chapter).joinedload(Chapter.project)
             ])
             if not script: raise ValueError("剧本不存在")
             
+            project_id = script.chapter.project_id
+            owner_id = str(script.chapter.project.owner_id)
+            
+            # 2. 预加载角色
+            stmt_chars = select(MovieCharacter).where(MovieCharacter.project_id == project_id)
+            all_chars = (await self.db_session.execute(stmt_chars)).scalars().all()
+            
+            # 3. 准备资源 (API Key, Provider)
+            api_key_service = APIKeyService(self.db_session)
+            api_key = await api_key_service.get_api_key_by_id(api_key_id, owner_id)
+            
+            llm_provider = ProviderFactory.create(
+                provider=api_key.provider,
+                api_key=api_key.get_api_key(),
+                base_url=api_key.base_url
+            )
+            
+            # 4. 筛选符合生产条件的分镜
             pending_shots = []
             for scene in script.scenes:
                 for shot in scene.shots:
-                    # 只有具备首帧且尚未生产（或生产失败）的才加入队列
                     if shot.first_frame_url and (not shot.video_url or shot.status == "failed"):
-                        pending_shots.append(str(shot.id))
+                        pending_shots.append(shot)
             
             if not pending_shots:
-                return {"total": 0, "message": "没有符合生产条件的分镜（需先有首帧）"}
+                return {"total": 0, "success": 0, "failed": 0, "message": "没有符合生产条件的分镜（需先有首帧）"}
 
-            # 这里由于涉及外部 API 调用和 LLM 翻译，不建议太高并发，限制为 3
-            semaphore = asyncio.Semaphore(3)
-            
-            async def task_wrapper(sid):
-                async with semaphore:
-                    try:
-                        from src.services.movie_production import MovieProductionService
-                        async with MovieProductionService() as svc:
-                            await svc.produce_shot_video(sid, api_key_id, model)
-                        return (True, None)
-                    except Exception as e:
-                        return (False, str(e))
+            # 5. 构建并发任务
+            semaphore = asyncio.Semaphore(5)
+            tasks = []
+            for shot in pending_shots:
+                ref_images = []
+                for char in all_chars:
+                    if char.name in shot.visual_description:
+                        if char.avatar_url: ref_images.append(char.avatar_url)
+                        if char.reference_images: ref_images.extend(char.reference_images)
+                ref_images = list(dict.fromkeys(ref_images))[:3]
+                
+                shot.api_key_id = api_key_id
+                tasks.append(_produce_one_shot_worker(
+                    shot, owner_id, api_key, ref_images, model, semaphore, llm_provider, self
+                ))
 
-            tasks = [task_wrapper(sid) for sid in pending_shots]
+            # 6. 执行并发
+            logger.info(f"开始批量分镜生产，并发数 {len(tasks)}")
             results = await asyncio.gather(*tasks)
             
-            success = len([r for r in results if r[0]])
-            failed = len([r for r in results if not r[0]])
+            success_count = sum(1 for r in results if r)
+            failed_count = len(results) - success_count
+            
+            # 7. 统一提交
+            await self.db_session.commit()
             
             return {
-                "total": len(pending_shots),
-                "success": success,
-                "failed": failed,
-                "message": f"批量生产已启动: 成功 {success}, 失败 {failed}"
+                "total": len(tasks),
+                "success": success_count,
+                "failed": failed_count,
+                "message": f"批量生产已完成: 成功 {success_count}, 失败 {failed_count}"
             }
 
     async def sync_all_video_tasks(self) -> dict:
@@ -253,8 +338,17 @@ class MovieProductionService(SessionManagedService):
         [Celery Beat 调用] 定时同步所有处理中的视频任务状态
         """
         async with self:
-            
-            stmt = select(MovieShot).where(MovieShot.status == 'processing', MovieShot.video_task_id != None)
+            # 1. 深度查询
+            stmt = (
+                select(MovieShot)
+                .where(MovieShot.status == 'processing', MovieShot.video_task_id != None)
+                .options(
+                    joinedload(MovieShot.scene)
+                    .joinedload(MovieScene.script)
+                    .joinedload(MovieScript.chapter)
+                    .joinedload(Chapter.project)
+                )
+            )
             processing_shots = (await self.db_session.execute(stmt)).scalars().all()
             
             if not processing_shots:
@@ -262,97 +356,57 @@ class MovieProductionService(SessionManagedService):
             
             logger.info(f"开始定时同步视频状态: 发现 {len(processing_shots)} 个处理中的分镜")
             
-            # 使用顺序处理以避免多个协程并发访问同一个 SQLAlchemy Session (Session 不是并发安全的)
+            # 2. 预热 API Keys
+            api_key_service = APIKeyService(self.db_session)
+            api_keys_map = {}
+            
+            # 3. 并发任务
+            semaphore = asyncio.Semaphore(10)
+            tasks = []
+            
             for shot in processing_shots:
+                api_key_id = shot.api_key_id
+                if not api_key_id: continue
+                
                 try:
-                    # 如果没有保存 api_key_id，则尝试寻找兜底 Key (旧数据兼容)
-                    api_key_id = shot.api_key_id
-                    if not api_key_id:
-                         logger.warning(f"分镜 {shot.id} 缺少 api_key_id，跳过状态同步")
-                         continue
-                    
-                    # 直接调用内部同步核心，利用当前的 self.db_session
-                    await self._perform_shot_sync(shot, api_key_id)
-                except Exception as e:
-                    logger.error(f"同步分镜 {shot.id} 状态失败: {e}")
+                    owner_id = str(shot.scene.script.chapter.project.owner_id)
+                except AttributeError:
+                    continue
+                
+                if api_key_id not in api_keys_map:
+                    api_keys_map[api_key_id] = await api_key_service.get_api_key_by_id(api_key_id, owner_id)
+                
+                tasks.append(_sync_one_shot_worker(shot, api_keys_map[api_key_id], semaphore))
 
-            return {"count": len(processing_shots)}
-        
-    async def sync_all_video_tasks_concurrently(self) -> dict:
-        """ 
-        [Celery Beat 调用] 定时同步所有处理中的视频任务状态（并发版）
-        
-        Returns:
-            dict: _description_
-        """
-        
-        async with self:
-            # 获取所有 processing 状态的分镜
+            if not tasks:
+                return {"count": 0}
+
+            # 4. 执行
+            await asyncio.gather(*tasks)
+            
+            # 5. 提交
+            await self.db_session.commit()
+            return {"count": len(tasks)}
 
     async def poll_shot_status(self, shot_id: str, api_key_id: str) -> str:
         """
-        [DEPRECATED] 轮询并更新镜头状态 (现在主用定时任务同步)
+        [DEPRECATED] 轮询并更新镜头状态
         """
         async with self:
-            shot = await self.db_session.get(MovieShot, shot_id)
+            stmt = select(MovieShot).where(MovieShot.id == shot_id).options(
+                joinedload(MovieShot.scene).joinedload(MovieScene.script).joinedload(MovieScript.chapter).joinedload(Chapter.project)
+            )
+            shot = (await self.db_session.execute(stmt)).scalars().first()
             if not shot or not shot.video_task_id: return "no_task"
             
-            return await self._perform_shot_sync(shot, api_key_id)
-
-    async def _perform_shot_sync(self, shot: MovieShot, api_key_id: str) -> str:
-        """
-        内部核心逻辑：执行单个镜头的同步逻辑
-        """
-        from src.models.chapter import Chapter
-        from sqlalchemy import select
-        from sqlalchemy.orm import joinedload
-        
-        if shot.status == "completed": return "completed"
-
-        # 获取 API Key 所需的 owner_id
-        # 使用 joinedload 避免 lazy load 异常
-        stmt = select(Chapter).join(MovieScript).join(MovieScene).where(MovieScene.id == shot.scene_id).options(joinedload(Chapter.project))
-        result = await self.db_session.execute(stmt)
-        chapter = result.scalars().first()
-        if not chapter or not chapter.project:
-            logger.error(f"无法确定分镜 {shot.id} 的 owner_id")
-            return "error"
+            owner_id = str(shot.scene.script.chapter.project.owner_id)
+            api_key_service = APIKeyService(self.db_session)
+            api_key = await api_key_service.get_api_key_by_id(api_key_id, owner_id)
             
-        owner_id = str(chapter.project.owner_id)
-
-        api_key_service = APIKeyService(self.db_session)
-        api_key = await api_key_service.get_api_key_by_id(api_key_id, owner_id)
-        
-        vector_provider = ProviderFactory.create(
-            provider="vectorengine", 
-            api_key=api_key.get_api_key(),
-            base_url=api_key.base_url
-        )
-        
-        try:
-            status_resp = await vector_provider.get_task_status(shot.video_task_id) # type: ignore
-            status = status_resp.get("status") # pending, processing, completed, failed
-            
-            if status == "completed":
-                content_resp = await vector_provider.get_video_content(shot.video_task_id) # type: ignore
-                shot.video_url = content_resp.get("video_url")
-                shot.status = "completed"
-                shot.last_error = None
-                await self.db_session.commit()
-            elif status == "failed":
-                shot.status = "failed"
-                shot.last_error = status_resp.get("error") or "Vector Engine 任务失败"
-                await self.db_session.commit()
-            
-            return status # type: ignore
-        except Exception as e:
-            logger.error(f"轮询 Vector Engine 异常 [shot_id={shot.id}]: {e}")
-            # 记录错误但不一定修改状态为 failed (除非是明确的任务不存在)
-            if "not found" in str(e).lower():
-                shot.status = "failed"
-                shot.last_error = "任务不存在"
-                await self.db_session.commit()
-            raise
+            semaphore = asyncio.Semaphore(1)
+            await _sync_one_shot_worker(shot, api_key, semaphore)
+            await self.db_session.commit()
+            return shot.status
 
 movie_production_service = MovieProductionService()
 __all__ = ["MovieProductionService", "movie_production_service"]
