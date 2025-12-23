@@ -110,9 +110,10 @@ export function useMovieStudio() {
         )
 
         if (hasProcessing) {
-            if (!autoRefreshTimer.value) {
-                autoRefreshTimer.value = setInterval(() => loadData(selectedChapterId.value, true), 15000)
-            }
+            // 移除定时刷新，依赖任务轮询机制
+            // if (!autoRefreshTimer.value) {
+            //     autoRefreshTimer.value = setInterval(() => loadData(selectedChapterId.value, true), 15000)
+            // }
         } else {
             if (autoRefreshTimer.value) {
                 clearInterval(autoRefreshTimer.value)
@@ -412,13 +413,16 @@ export function useMovieStudio() {
         const shotId = selectedShotId.value
         showGenerateDialog.value = false
         try {
+            // 强制使用veo_3_1-fast模型，不传递model参数
             await movieService.produceShot(shotId, {
-                api_key_id: genConfig.value.api_key_id,
-                model: genConfig.value.model
+                api_key_id: genConfig.value.api_key_id
             })
             ElMessage.success('视频生产任务已提交')
-            loadData(selectedChapterId.value)
-        } catch (err) { ElMessage.error('视频生产失败') }
+            // 立即刷新数据以更新按钮状态
+            await loadData(selectedChapterId.value)
+        } catch (err) {
+            ElMessage.error('视频生产失败')
+        }
     }
 
     const handleBatchProduceVideos = async () => {
@@ -436,8 +440,7 @@ export function useMovieStudio() {
         batchProducing.value = true
         try {
             const response = await movieService.batchProduceVideos(script.value.id, {
-                api_key_id: genConfig.value.api_key_id,
-                model: 'veo3.1-fast'
+                api_key_id: genConfig.value.api_key_id
             })
             if (response?.task_id) {
                 ElMessage.success('批量视频生产任务已启动, 正在排队...')
@@ -461,12 +464,50 @@ export function useMovieStudio() {
     }
 
     const handlePrepareMaterials = async () => {
-        if (!selectedChapterId.value) return
+        if (!selectedChapterId.value || !script.value) return
         try {
-            await movieService.prepareChapterMaterials(selectedChapterId.value)
-            ElMessage.success("章节状态更新成功！已进入素材准备阶段")
-            loadData()
-        } catch (e) { ElMessage.error(e.response?.data?.detail || "更新状态失败") }
+            await movieService.prepareMaterials(selectedChapterId.value)
+            ElMessage.success('素材准备完成')
+            loadData(selectedChapterId.value)
+        } catch (err) {
+            ElMessage.error('素材准备失败')
+        }
+    }
+
+    // ==================== 视频生成 ====================
+
+    const handleGenerateVideo = async () => {
+        if (!selectedChapterId.value) return
+        dialogMode.value = 'generate-video'
+        showGenerateDialog.value = true
+    }
+
+    const confirmGenerateVideo = async () => {
+        if (!selectedChapterId.value) return
+        showGenerateDialog.value = false
+
+        try {
+            const response = await api.post('/api/v1/video/tasks', {
+                chapter_id: selectedChapterId.value,
+                background_id: genConfig.value.background_id || null,
+                gen_setting: {
+                    bgm_volume: genConfig.value.bgm_volume || 0.15
+                }
+            })
+
+            ElMessage.success('视频生成任务已提交')
+
+            // 开始轮询任务状态
+            if (response.data.task_id) {
+                startPolling(response.data.task_id, async (result) => {
+                    ElMessage.success(`视频生成完成: ${result.duration}秒`)
+                    await loadData(selectedChapterId.value)
+                })
+            }
+        } catch (err) {
+            console.error(err)
+            ElMessage.error('视频生成任务提交失败')
+        }
     }
 
     const handleRegenerateKeyframe = async () => {
@@ -568,6 +609,13 @@ export function useMovieStudio() {
         }
     })
 
+    // 监听api_key_id变化，自动加载模型
+    watch(() => genConfig.value.api_key_id, (newKeyId) => {
+        if (newKeyId && showGenerateDialog.value) {
+            fetchModels()
+        }
+    })
+
     onMounted(async () => {
         await initProject()
         if (selectedChapterId.value) loadData(selectedChapterId.value)
@@ -598,6 +646,7 @@ export function useMovieStudio() {
         confirmProduceSingle, handleBatchProduceVideos, confirmProduceBatch,
         handlePrepareMaterials, handleRegenerateKeyframe, handleRegenerateLastFrame,
         handleRegenerateVideo, toggleShotView, goBack, handleShotCommand,
-        checkCompletion, handleUpdateShotPrompt, terminateTask
+        checkCompletion, handleUpdateShotPrompt, terminateTask,
+        handleGenerateVideo, confirmGenerateVideo
     }
 }

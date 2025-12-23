@@ -184,8 +184,8 @@ class MovieProductionService(BaseService):
         system_prompt = (
             "You are a professional AI video prompt engineer. Translate and polish the given scene description into a high-quality, detailed English prompt for video generation.\n"
             "CRITICAL: If 'Dialogue' is provided, you MUST append a specific instruction at the end of the prompt to render bilingual subtitles at the bottom of the video.\n"
-            "The subtitle format should be: '[Chinese Dialogue] / [English Translation]'.\n"
             "Avoid outputting anything other than the prompt itself."
+            ""
         )
         user_content = f"Visual Description: {visual_desc}\nCamera Movement: {camera_movement or 'None'}\nPerformance/Action: {performance_prompt or 'None'}\nDialogue: {dialogue or 'None'}"
         
@@ -199,9 +199,6 @@ class MovieProductionService(BaseService):
                 ]
             )
             polished_prompt = response.choices[0].message.content.strip()
-            
-            if dialogue and "subtitles" not in polished_prompt.lower():
-                polished_prompt += f" Display bilingual subtitles at the bottom: '{dialogue} / [Translation]'"
                 
             return polished_prompt
         except Exception as e:

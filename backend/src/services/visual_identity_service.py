@@ -376,7 +376,7 @@ class VisualIdentityService(BaseService):
         
         
         # 测试时 只取一个任务
-        tasks = tasks[:1]
+        #tasks = tasks[:1]
         
         
         results = await asyncio.gather(*tasks)

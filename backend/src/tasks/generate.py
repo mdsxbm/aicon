@@ -84,12 +84,33 @@ async def generate_audio(db_session: AsyncSession, self, api_key_id: str, senten
 )
 @async_task_decorator
 async def synthesize_video(db_session: AsyncSession, self, video_task_id: str):
-    """视频合成的 Celery 任务"""
-    from src.services.video_synthesis import VideoSynthesisService
+    """视频合成的 Celery 任务 - 根据项目类型路由到不同服务"""
+    from src.services.video_task import VideoTaskService
+    from src.services.chapter import ChapterService
+    
     logger.info(f"Celery任务开始: synthesize_video (video_task_id={video_task_id})")
     
-    service = VideoSynthesisService(db_session)
-    result = await service.synthesize_video(video_task_id)
+    # 1. 加载任务
+    task_service = VideoTaskService(db_session)
+    task = await task_service.get_video_task_by_id(video_task_id)
+    
+    # 2. 加载章节判断项目类型
+    chapter_service = ChapterService(db_session)
+    chapter = await chapter_service.get_chapter_by_id(task.chapter_id)
+    
+    # 3. 根据项目类型路由到不同服务
+    if chapter.project.type == 'movie':
+        # 电影类型 - 使用MovieVideoService(不加载Whisper模型)
+        logger.info(f"检测到电影类型项目,使用MovieVideoService")
+        from src.services.movie_video_service import MovieVideoService
+        service = MovieVideoService(db_session)
+        result = await service.synthesize_movie_video(video_task_id)
+    else:
+        # 图解说类型 - 使用VideoSynthesisService
+        logger.info(f"检测到图解说类型项目,使用VideoSynthesisService")
+        from src.services.video_synthesis import VideoSynthesisService
+        service = VideoSynthesisService(db_session)
+        result = await service.synthesize_video(video_task_id)
     
     logger.info(f"Celery任务成功: synthesize_video (video_task_id={video_task_id})")
     return result
