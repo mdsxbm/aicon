@@ -77,6 +77,8 @@
             :extracting="extractingCharacters"
             @detect="handleDetectCharacters"
             @generate-avatar="handleGenerateAvatar"
+            @delete-character="handleDeleteCharacter"
+            @batch-generate="handleBatchGenerateAvatars"
           />
         </transition>
       </div>
@@ -114,6 +116,7 @@ const {
   canPrepareMaterials, allCharactersReady,
   fetchModels, handleGenerateScript, confirmGenerate,
   handleDetectCharacters, confirmExtractCharacters, handleGenerateAvatar, confirmAvatar,
+  handleDeleteCharacter, handleBatchGenerateAvatars,
   handleGenerateKeyframes, confirmKeyframes, handleProduceShot,
   confirmProduceSingle, handleBatchProduceVideos, confirmProduceBatch,
   handlePrepareMaterials, handleRegenerateKeyframe, handleRegenerateLastFrame,

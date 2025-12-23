@@ -123,6 +123,10 @@ class KeyframeGenerateRequest(BaseModel):
     api_key_id: str
     model: Optional[str] = None
 
+class BatchGenerateAvatarsRequest(BaseModel):
+    api_key_id: str
+    model: Optional[str] = None
+
 # --- 生产相关 ---
 class ShotProduceRequest(BaseModel):
     api_key_id: str

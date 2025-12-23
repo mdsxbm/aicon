@@ -16,7 +16,7 @@ from src.api.schemas.movie import (
     MovieCharacterBase, CharacterExtractRequest,
     ShotProduceRequest, CharacterUpdateRequest,
     CharacterGenerateRequest, KeyframeGenerateRequest,
-    ShotUpdateRequest
+    BatchGenerateAvatarsRequest, ShotUpdateRequest
 )
 from src.tasks.movie import movie_produce_shot
 
@@ -98,6 +98,21 @@ async def update_character(
         raise HTTPException(status_code=404, detail="Character not found")
     return updated_char
 
+@router.delete("/characters/{character_id}", summary="删除角色")
+async def delete_character(
+    character_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_required)
+):
+    """
+    删除角色
+    """
+    movie_service = MovieService(db)
+    success = await movie_service.delete_character(character_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return {"success": True, "message": "角色已删除"}
+
 @router.post("/characters/{character_id}/generate", summary="生成角色头像")
 async def generate_character_avatar(
     character_id: str,
@@ -111,6 +126,20 @@ async def generate_character_avatar(
     from src.tasks.movie import movie_generate_character_avatar
     task = movie_generate_character_avatar.delay(character_id, req.api_key_id, req.model, req.prompt, req.style)
     return {"task_id": task.id, "message": "角色头像生成任务已提交"}
+
+@router.post("/projects/{project_id}/characters/batch-generate", summary="批量生成角色定妆照")
+async def batch_generate_avatars(
+    project_id: str,
+    req: BatchGenerateAvatarsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_required)
+):
+    """
+    批量为所有未生成定妆照的角色生成头像
+    """
+    from src.tasks.movie import movie_batch_generate_avatars
+    task = movie_batch_generate_avatars.delay(project_id, req.api_key_id, req.model)
+    return {"task_id": task.id, "message": "批量生成定妆照任务已提交"}
 
 @router.post("/scripts/{script_id}/generate-keyframes", summary="生成剧本分镜首帧图")
 async def generate_keyframes(

@@ -297,6 +297,70 @@ export function useMovieStudio() {
         }
     }
 
+    const handleDeleteCharacter = async (char) => {
+        try {
+            await ElMessageBox.confirm(
+                `确定要删除角色 "${char.name}" 吗?此操作不可恢复。`,
+                '删除角色',
+                {
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                }
+            )
+
+            await movieService.deleteCharacter(char.id)
+            ElMessage.success('角色已删除')
+
+            // 刷新角色列表
+            if (chapter.value?.project_id) {
+                characters.value = await movieService.getCharacters(chapter.value.project_id)
+            }
+        } catch (err) {
+            if (err !== 'cancel') {
+                ElMessage.error('删除失败')
+            }
+        }
+    }
+
+    const handleBatchGenerateAvatars = async () => {
+        if (!genConfig.value.api_key_id) {
+            dialogMode.value = 'batch-avatars'
+            showGenerateDialog.value = true
+            return
+        }
+        confirmBatchGenerateAvatars()
+    }
+
+    const confirmBatchGenerateAvatars = async () => {
+        if (!genConfig.value.api_key_id) {
+            ElMessage.warning('请选择 API Key')
+            return
+        }
+
+        showGenerateDialog.value = false
+        try {
+            const response = await movieService.batchGenerateAvatars(projectId.value, {
+                api_key_id: genConfig.value.api_key_id,
+                model: genConfig.value.model
+            })
+
+            if (response?.task_id) {
+                ElMessage.success('批量生成任务已提交...')
+                startPolling(response.task_id, async (result) => {
+                    ElMessage.success(`批量生成完成: 成功 ${result.success}, 失败 ${result.failed}`)
+                    if (chapter.value?.project_id) {
+                        characters.value = await movieService.getCharacters(chapter.value.project_id)
+                    }
+                }, (error) => {
+                    ElMessage.error(`批量生成失败: ${error.message}`)
+                })
+            }
+        } catch (err) {
+            ElMessage.error('无法启动批量生成')
+        }
+    }
+
     const handleGenerateKeyframes = () => {
         if (!script.value) return
         dialogMode.value = 'keyframes'
@@ -532,6 +596,7 @@ export function useMovieStudio() {
         // 方法
         loadData, fetchModels, handleGenerateScript, confirmGenerate,
         handleDetectCharacters, confirmExtractCharacters, handleGenerateAvatar, confirmAvatar,
+        handleDeleteCharacter, handleBatchGenerateAvatars,
         handleGenerateKeyframes, confirmKeyframes, handleProduceShot,
         confirmProduceSingle, handleBatchProduceVideos, confirmProduceBatch,
         handlePrepareMaterials, handleRegenerateKeyframe, handleRegenerateLastFrame,

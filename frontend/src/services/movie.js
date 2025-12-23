@@ -1,4 +1,4 @@
-import { get, post, put } from './api'
+import api, { get, post, put } from './api'
 
 export const movieService = {
     /**
@@ -90,6 +90,20 @@ export const movieService = {
      */
     prepareChapterMaterials(chapterId) {
         return post(`/movie/chapters/${chapterId}/prepare-materials`)
+    },
+
+    /**
+     * 删除角色
+     */
+    deleteCharacter(characterId) {
+        return api.delete(`/movie/characters/${characterId}`)
+    },
+
+    /**
+     * 批量生成角色定妆照
+     */
+    batchGenerateAvatars(projectId, data) {
+        return post(`/movie/projects/${projectId}/characters/batch-generate`, data)
     },
 
     /**

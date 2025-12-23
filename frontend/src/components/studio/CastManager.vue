@@ -2,9 +2,14 @@
   <div class="studio-sidebar">
     <div class="sidebar-header">
       <h3>剧组成员</h3>
-      <el-button type="primary" link size="small" @click="$emit('detect')" :loading="extracting">
-        <el-icon><MagicStick /></el-icon> 智能提取
-      </el-button>
+      <div class="header-actions">
+        <el-button type="primary" link size="small" @click="$emit('detect')" :loading="extracting">
+          <el-icon><MagicStick /></el-icon> 智能提取
+        </el-button>
+        <el-button type="success" link size="small" @click="$emit('batch-generate')" v-if="characters.length > 0">
+          <el-icon><Picture /></el-icon> 批量定妆
+        </el-button>
+      </div>
     </div>
     <div class="cast-list">
       <el-card v-for="char in characters" :key="char.id" class="char-card" :body-style="{ padding: '10px' }">
@@ -37,27 +42,36 @@
                 style="margin-left: 10px;"
                 title="定妆/重绘形象"
               />
+              <el-button 
+                type="danger" 
+                circle 
+                size="small" 
+                :icon="Delete" 
+                @click="$emit('delete-character', char)"
+                style="margin-left: 5px;"
+                title="删除角色"
+              />
             </div>
           </div>
         </div>
         <div class="char-desc text-truncate">{{ char.description }}</div>
       </el-card>
       <div v-if="characters.length === 0" class="empty-cast">
-        暂无角色，请点击智能提取
+        暂无角色,请点击智能提取
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { MagicStick, User } from '@element-plus/icons-vue'
+import { MagicStick, User, Delete, Picture } from '@element-plus/icons-vue'
 
 defineProps({
   characters: Array,
   extracting: Boolean
 })
 
-defineEmits(['detect', 'generate-avatar'])
+defineEmits(['detect', 'generate-avatar', 'delete-character', 'batch-generate'])
 </script>
 
 <style scoped>
@@ -82,6 +96,11 @@ defineEmits(['detect', 'generate-avatar'])
   margin: 0;
   font-size: 15px;
   color: #303133;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .cast-list {

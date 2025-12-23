@@ -81,6 +81,18 @@ class MovieService(BaseService):
         await self.db_session.refresh(char)
         return char
 
+    async def delete_character(self, character_id: str) -> bool:
+        """
+        删除角色
+        """
+        char = await self.db_session.get(MovieCharacter, character_id)
+        if not char:
+            return False
+            
+        await self.db_session.delete(char)
+        await self.db_session.commit()
+        return True
+
     async def update_shot(self, shot_id: str, data: dict) -> Optional[MovieShot]:
         """
         更新分镜信息

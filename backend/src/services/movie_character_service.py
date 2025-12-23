@@ -59,6 +59,7 @@ Technical Output:
 - Unreal Engine 5 / cinematic renderer quality
 - 8K-level detail
 - Aspect ratio: 16:9
+- Include the Name translate to EnglishName in the top-left corner of the image, clearly visible and readable
 """
     
     @classmethod
@@ -143,6 +144,11 @@ class MovieCharacterService(BaseService):
    - era_background: 根据剧本内容推断时代背景,如果不明确则使用"Modern era"
    - occupation: 角色的职业或社会地位
    - key_visual_traits: 提取3-4个最关键的视觉特征,用于生成角色三视图
+
+3. **特征提取要求**:
+    - 优先从剧本中提取明确描述的视觉特征，如果剧本中没有明确描述，则根据角色的身份和时代背景进行合理推断
+    - 对话风格应反映角色的性格和背景,例如:贵族角色可能说话较为正式,街头混混可能使用俚语
+    
 
 待分析剧本:
 ---
@@ -302,11 +308,14 @@ class MovieCharacterService(BaseService):
             if not prompt:
                 raise ValueError("必须提供生成提示词")
             
+             # 增强提示词，让AI模型在图片左上角生成角色名称
+            enhanced_prompt = f"{prompt}. IMPORTANT: Include the text '{char.name}' in the top-left corner of the image, clearly visible and readable."
+            
             # 调用生图模型
-            logger.info(f"生成角色头像提示词: {prompt}")
+            logger.info(f"生成角色头像提示词: {enhanced_prompt}")
             result = await retry_with_backoff(
                 lambda: image_provider.generate_image(
-                    prompt=prompt,
+                    prompt=enhanced_prompt,
                     model=model
                 )
             )
