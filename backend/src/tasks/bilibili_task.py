@@ -14,10 +14,7 @@ logger = get_logger(__name__)
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_jitter=True,
+    max_retries=0,
     name="bilibili.upload_chapter"
 )
 @async_task_decorator

@@ -148,6 +148,7 @@ class MovieCharacterService(BaseService):
 3. **特征提取要求**:
     - 优先从剧本中提取明确描述的视觉特征，如果剧本中没有明确描述，则根据角色的身份和时代背景进行合理推断
     - 对话风格应反映角色的性格和背景,例如:贵族角色可能说话较为正式,街头混混可能使用俚语
+    - 尽可能详细的特征提取，则根据角色的身份和时代背景进行合理推断。
     
 
 待分析剧本:
@@ -375,6 +376,63 @@ class MovieCharacterService(BaseService):
         except Exception as e:
             logger.error(f"生成角色头像失败: {e}")
             raise
+
+    async def batch_generate_avatars(self, project_id: str, api_key_id: str, model: str = None) -> dict:
+        """
+        批量生成角色定妆照
+        使用并发请求提高效率
+        """
+        from sqlalchemy import select
+        import asyncio
+        
+        # 获取所有未生成头像的角色
+        stmt = select(MovieCharacter).where(
+            MovieCharacter.project_id == project_id,
+            MovieCharacter.avatar_url == None
+        )
+        result = await self.db_session.execute(stmt)
+        characters = result.scalars().all()
+        
+        if not characters:
+            return {"success": 0, "failed": 0, "total": 0, "message": "没有需要生成头像的角色"}
+        
+        logger.info(f"开始批量生成 {len(characters)} 个角色的定妆照")
+        
+        # 定义单个角色的生成任务
+        async def generate_single(char):
+            try:
+                if not char.generated_prompt:
+                    logger.warning(f"角色 {char.name} 没有generated_prompt,跳过")
+                    return {"success": False, "character": char.name, "error": "缺少生成提示词"}
+                
+                await self.generate_character_avatar(
+                    str(char.id),
+                    api_key_id,
+                    model,
+                    char.generated_prompt,
+                    "cinematic"
+                )
+                logger.info(f"成功生成角色 {char.name} 的头像")
+                return {"success": True, "character": char.name}
+            except Exception as e:
+                logger.error(f"生成角色 {char.name} 头像失败: {e}")
+                return {"success": False, "character": char.name, "error": str(e)}
+        
+        # 并发执行所有生成任务
+        results = await asyncio.gather(*[generate_single(char) for char in characters], return_exceptions=True)
+        
+        # 统计结果
+        success_count = sum(1 for r in results if isinstance(r, dict) and r.get("success"))
+        failed_count = len(results) - success_count
+        
+        logger.info(f"批量生成完成: 成功 {success_count}, 失败 {failed_count}")
+        
+        return {
+            "success": success_count,
+            "failed": failed_count,
+            "total": len(characters),
+            "details": results
+        }
 
 __all__ = ["MovieCharacterService"]
 

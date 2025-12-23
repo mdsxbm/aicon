@@ -11,10 +11,7 @@ logger = get_logger(__name__)
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_jitter=True,
+    max_retries=0,
     name="generate.generate_prompts"
 )
 @async_task_decorator
@@ -31,10 +28,7 @@ async def generate_prompts(db_session: AsyncSession, self, chapter_id: str, api_
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_jitter=True,
+    max_retries=0,
     name="generate.generate_prompts_by_ids"
 )
 @async_task_decorator
@@ -51,10 +45,7 @@ async def generate_prompts_by_ids(db_session: AsyncSession, self, sentence_ids: 
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_jitter=True,
+    max_retries=0,
     name="generate.generate_images"
 )
 @async_task_decorator
@@ -71,10 +62,7 @@ async def generate_images(db_session: AsyncSession, self, api_key_id: str, sente
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_jitter=True,
+    max_retries=0,
     name="generate.generate_audio"
 )
 @async_task_decorator
@@ -91,10 +79,7 @@ async def generate_audio(db_session: AsyncSession, self, api_key_id: str, senten
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_jitter=True,
+    max_retries=0,
     name="generate.synthesize_video"
 )
 @async_task_decorator

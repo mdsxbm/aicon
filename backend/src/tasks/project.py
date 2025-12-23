@@ -11,10 +11,7 @@ logger = get_logger(__name__)
 
 @celery_app.task(
     bind=True,
-    max_retries=2,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_jitter=True,
+    max_retries=0,
     name="file_processing.process_uploaded_file"
 )
 @async_task_decorator
@@ -31,10 +28,7 @@ async def process_uploaded_file(db_session: AsyncSession, self, project_id: str,
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_jitter=True,
+    max_retries=0,
     name="file_processing.retry_failed_project"
 )
 @async_task_decorator

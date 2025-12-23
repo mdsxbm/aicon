@@ -11,8 +11,7 @@ logger = get_logger(__name__)
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.generate_script"
 )
 @async_task_decorator
@@ -32,8 +31,7 @@ async def movie_generate_script(db_session: AsyncSession, self, chapter_id: str,
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.produce_shot"
 )
 @async_task_decorator
@@ -50,8 +48,7 @@ async def movie_produce_shot(db_session: AsyncSession, self, shot_id: str, api_k
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.extract_characters"
 )
 @async_task_decorator
@@ -68,8 +65,7 @@ async def movie_extract_characters(db_session: AsyncSession, self, script_id: st
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.generate_character_avatar"
 )
 @async_task_decorator
@@ -86,8 +82,7 @@ async def movie_generate_character_avatar(db_session: AsyncSession, self, charac
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.generate_keyframes"
 )
 @async_task_decorator
@@ -104,8 +99,7 @@ async def movie_generate_keyframes(db_session: AsyncSession, self, script_id: st
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.batch_produce_shots"
 )
 @async_task_decorator
@@ -122,8 +116,7 @@ async def movie_batch_produce_shots(db_session: AsyncSession, self, script_id: s
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.regenerate_keyframe"
 )
 @async_task_decorator
@@ -140,8 +133,7 @@ async def movie_regenerate_keyframe(db_session: AsyncSession, self, shot_id: str
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.regenerate_last_frame"
 )
 @async_task_decorator
@@ -170,50 +162,18 @@ async def sync_all_video_task_status(db_session: AsyncSession):
 
 @celery_app.task(
     bind=True,
-    max_retries=1,
-    autoretry_for=(Exception,),
+    max_retries=0,
     name="movie.batch_generate_avatars"
 )
 @async_task_decorator
 async def movie_batch_generate_avatars(db_session: AsyncSession, self, project_id: str, api_key_id: str, model: str = None):
     """批量生成角色头像的 Celery 任务"""
     from src.services.movie_character_service import MovieCharacterService
-    from src.models.movie import MovieCharacter
-    from sqlalchemy import select
     
     logger.info(f"Celery任务开始: movie_batch_generate_avatars (project_id={project_id})")
     
-    # 获取所有未生成头像的角色
-    stmt = select(MovieCharacter).where(
-        MovieCharacter.project_id == project_id,
-        MovieCharacter.avatar_url == None
-    )
-    result = await db_session.execute(stmt)
-    characters = result.scalars().all()
-    
     service = MovieCharacterService(db_session)
-    success_count = 0
-    failed_count = 0
+    result = await service.batch_generate_avatars(project_id, api_key_id, model)
     
-    for char in characters:
-        try:
-            # 使用generated_prompt生成头像
-            if char.generated_prompt:
-                await service.generate_character_avatar(
-                    str(char.id), 
-                    api_key_id, 
-                    model, 
-                    char.generated_prompt, 
-                    "cinematic"
-                )
-                success_count += 1
-                logger.info(f"成功生成角色 {char.name} 的头像")
-            else:
-                logger.warning(f"角色 {char.name} 没有generated_prompt,跳过")
-                failed_count += 1
-        except Exception as e:
-            logger.error(f"生成角色 {char.name} 头像失败: {e}")
-            failed_count += 1
-    
-    logger.info(f"Celery任务完成: movie_batch_generate_avatars, 成功: {success_count}, 失败: {failed_count}")
-    return {"success": success_count, "failed": failed_count, "total": len(characters)}
+    logger.info(f"Celery任务完成: movie_batch_generate_avatars, 成功: {result['success']}, 失败: {result['failed']}")
+    return result
