@@ -295,7 +295,7 @@ class VisualIdentityService(BaseService):
     async def generate_shot_last_frame(self, shot_id: str, api_key_id: str, model: Optional[str] = None) -> str:
         """为分镜生成尾帧图"""
         shot = await self.db_session.get(MovieShot, shot_id, options=[
-            joinedload(MovieShot.scene).joinedload(MovieScene.script).joinedload(MovieScene.script).joinedload(MovieScript.chapter).joinedload(Chapter.project)
+            joinedload(MovieShot.scene).joinedload(MovieScene.script).joinedload(MovieScript.chapter).joinedload(Chapter.project)
         ])
         if not shot: raise ValueError("未找到分镜")
         

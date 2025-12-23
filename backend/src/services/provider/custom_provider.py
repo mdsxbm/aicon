@@ -153,6 +153,7 @@ class CustomProvider(BaseLLMProvider):
         reference_images = kwargs.get("reference_images")
         if reference_images:
             import base64
+            from datetime import timedelta
             from src.utils.storage import get_storage_client
             
             logger.info(f"处理 {len(reference_images)} 张参考图")
@@ -164,7 +165,7 @@ class CustomProvider(BaseLLMProvider):
                 converted_urls = []
                 for key in reference_images[:5]:  # 最大5张
                     try:
-                        presigned_url = await storage_client.get_presigned_url(key, expires=3600)
+                        presigned_url = storage_client.get_presigned_url(key, expires=timedelta(hours=1))
                         converted_urls.append(presigned_url)
                         logger.debug(f"MinIO key转URL: {key[:30]}...")
                     except Exception as e:
@@ -202,7 +203,6 @@ class CustomProvider(BaseLLMProvider):
             "contents": [{"role": "user", "parts": parts}],
             "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
         }
-        logger.info(f"Gemini 生成图像请求负载: {json.dumps(payload)}")
 
         async with self.semaphore:  # 控制最大并发
             async with aiohttp.ClientSession() as session:
