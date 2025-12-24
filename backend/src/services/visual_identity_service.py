@@ -97,31 +97,35 @@ def _collect_character_references(chars: List[MovieCharacter], shot: MovieShot, 
 # 独立 Worker 函数 (参照 image.py 规范)
 # ============================================================
 
-async def _generate_one_frame_worker(
+async def _generate_keyframe_worker(
     shot: MovieShot,
     chars: List[MovieCharacter],
     user_id: Any,
     api_key,
-    frame_type: str,
     model: Optional[str],
     semaphore: asyncio.Semaphore,
     storage_client,
     ref_images: List[str] = None
 ):
     """
-    单个分镜单帧生成的 Worker - 负责生成、下载、上传，不负责 Commit
+    单个分镜关键帧生成的 Worker - 负责生成、下载、上传，不负责 Commit
     包含角色参考图以确保人物一致性
+    
+    注意：新架构下，每个分镜只有一个关键帧（keyframe_url）
     """
     import base64
     
     async with semaphore:
         try:
             # 1. 构建 Prompt (包含角色信息)
-            base_prompt = shot.first_frame_prompt if frame_type == "first" else shot.last_frame_prompt
+            base_prompt = shot.visual_description
             
             character_context = ""
+            # 从shot.characters字段获取角色列表
+            shot_characters = shot.characters if hasattr(shot, 'characters') and shot.characters else []
+            
             for char in chars:
-                if char.name in shot.visual_description or (shot.dialogue and char.name in shot.dialogue):
+                if char.name in shot_characters:
                     character_context += f" Character {char.name}: {char.visual_traits}."
 
             # 如果有角色参考图，强调一致性
@@ -137,7 +141,7 @@ async def _generate_one_frame_worker(
                 base_url=api_key.base_url
             )
 
-            logger.info(f"生成分镜 {shot.id} {frame_type} 帧, Prompt: {final_prompt}, Refs: {len(ref_images or [])}")
+            logger.info(f"生成分镜 {shot.id} 关键帧, Prompt: {final_prompt[:100]}..., Refs: {len(ref_images or [])}")
             
             # 准备生成参数
             gen_params = {
@@ -170,30 +174,25 @@ async def _generate_one_frame_worker(
             # 4. 上传存储
             file_id = str(uuid.uuid4())
             upload_file = UploadFile(
-                filename=f"{file_id}_{frame_type}.jpg",
+                filename=f"{file_id}_keyframe.jpg",
                 file=io.BytesIO(content),
             )
             
             storage_result = await storage_client.upload_file(
                 user_id=str(user_id),
                 file=upload_file,
-                metadata={"shot_id": str(shot.id), "frame_type": frame_type}
+                metadata={"shot_id": str(shot.id), "type": "keyframe"}
             )
             object_key = storage_result["object_key"]
 
-            # 5. 更新对象属性 (不 Commit)
-            if frame_type == "first":
-                shot.first_frame_url = object_key
-                shot.first_frame_prompt = final_prompt
-            else:
-                shot.last_frame_url = object_key
-                shot.last_frame_prompt = final_prompt
+            # 5. 更新对象属性 (不 Commit) - 使用新的keyframe_url字段
+            shot.keyframe_url = object_key
                 
-            logger.info(f"{frame_type} 帧生成并存储完成: shot_id={shot.id}, key={object_key}")
+            logger.info(f"关键帧生成并存储完成: shot_id={shot.id}, key={object_key}")
             return True
             
         except Exception as e:
-            logger.error(f"Worker 生成单帧失败 [shot_id={shot.id}]: {e}")
+            logger.error(f"Worker 生成关键帧失败 [shot_id={shot.id}]: {e}")
             return False
 
 
@@ -263,8 +262,8 @@ class VisualIdentityService(BaseService):
             logger.error(f"生成角色参考图失败: {e}")
             raise
 
-    async def generate_shot_first_frame(self, shot_id: str, api_key_id: str, model: Optional[str] = None) -> str:
-        """为分镜生成首帧图"""
+    async def generate_shot_keyframe(self, shot_id: str, api_key_id: str, model: Optional[str] = None) -> str:
+        """为分镜生成关键帧图"""
         shot = await self.db_session.get(MovieShot, shot_id, options=[
             joinedload(MovieShot.scene).joinedload(MovieScene.script).joinedload(MovieScript.chapter).joinedload(Chapter.project)
         ])
@@ -285,49 +284,20 @@ class VisualIdentityService(BaseService):
         storage_client = await get_storage_client()
         semaphore = asyncio.Semaphore(1)
         
-        success = await _generate_one_frame_worker(shot, chars, user_id, api_key, "first", model, semaphore, storage_client, ref_images)
+        success = await _generate_keyframe_worker(shot, chars, user_id, api_key, model, semaphore, storage_client, ref_images)
         if success:
             await self.db_session.commit()
-            return shot.first_frame_url # type: ignore
+            return shot.keyframe_url # type: ignore
         else:
-            raise Exception("生成分镜首帧失败")
+            raise Exception("生成分镜关键帧失败")
 
-    async def generate_shot_last_frame(self, shot_id: str, api_key_id: str, model: Optional[str] = None) -> str:
-        """为分镜生成尾帧图"""
-        shot = await self.db_session.get(MovieShot, shot_id, options=[
-            joinedload(MovieShot.scene).joinedload(MovieScene.script).joinedload(MovieScript.chapter).joinedload(Chapter.project)
-        ])
-        if not shot: raise ValueError("未找到分镜")
-        
-        project_id = shot.scene.script.chapter.project_id
-        user_id = shot.scene.script.chapter.project.owner_id
-        
-        stmt = select(MovieCharacter).where(MovieCharacter.project_id == project_id)
-        chars = (await self.db_session.execute(stmt)).scalars().all()
-        
-        # 收集角色参考图
-        ref_images = _collect_character_references(chars, shot)
-        
-        api_key_service = APIKeyService(self.db_session)
-        api_key = await api_key_service.get_api_key_by_id(api_key_id, str(user_id))
-        
-        storage_client = await get_storage_client()
-        semaphore = asyncio.Semaphore(1)
-        
-        success = await _generate_one_frame_worker(shot, chars, user_id, api_key, "last", model, semaphore, storage_client, ref_images)
-        if success:
-            await self.db_session.commit()
-            return shot.last_frame_url # type: ignore
-        else:
-            raise Exception("生成分镜尾帧失败")
-
-    async def regenerate_shot_keyframe(self, shot_id: str, api_key_id: str, model: Optional[str] = None) -> str:
-        """重新生成分镜首帧图(异步任务入口)"""
-        return await self.generate_shot_first_frame(shot_id, api_key_id, model)
+    # Removed: generate_shot_last_frame - obsolete, shots now only have single keyframe
+    # Removed: regenerate_shot_keyframe - use generate_shot_keyframe instead
 
     async def batch_generate_keyframes(self, script_id: str, api_key_id: str, model: Optional[str] = None) -> dict:
         """
-        批量为剧本下的所有分镜生成首帧 (参考 image.py)
+        批量为剧本下的所有分镜生成关键帧
+        新架构：每个分镜只有一个关键帧（keyframe_url）
         """
         # 1. 深度加载
         script = await self.db_session.get(MovieScript, script_id, options=[
@@ -348,37 +318,24 @@ class VisualIdentityService(BaseService):
         api_key = await api_key_service.get_api_key_by_id(api_key_id, str(user_id))
         storage_client = await get_storage_client()
 
-        # 4. 筛选待处理任务
+        # 4. 筛选待处理任务 - 只生成缺少keyframe的分镜
         tasks = []
         semaphore = asyncio.Semaphore(5)
         
         for scene in script.scenes:
             for shot in scene.shots:
-                # 检查是否需要生成首帧
-                if not shot.first_frame_url:
+                # 检查是否需要生成关键帧
+                if not shot.keyframe_url:
                     ref_images = _collect_character_references(chars, shot)
                     tasks.append(
-                        _generate_one_frame_worker(shot, chars, user_id, api_key, "first", model, semaphore, storage_client, ref_images)
-                    )
-                
-                # 检查是否需要生成尾帧
-                if not shot.last_frame_url:
-                    ref_images = _collect_character_references(chars, shot)
-                    tasks.append(
-                        _generate_one_frame_worker(shot, chars, user_id, api_key, "last", model, semaphore, storage_client, ref_images)
+                        _generate_keyframe_worker(shot, chars, user_id, api_key, model, semaphore, storage_client, ref_images)
                     )
         
         # 5. 无任务则返回
         if not tasks:
-            return {"total": 0, "success": 0, "failed": 0, "message": "所有分镜已有首尾帧"}
+            return {"total": 0, "success": 0, "failed": 0, "message": "所有分镜已有关键帧"}
 
         # 6. 执行并发
-        
-        
-        # 测试时 只取一个任务
-        #tasks = tasks[:1]
-        
-        
         results = await asyncio.gather(*tasks)
         
         success_count = sum(1 for r in results if r)
@@ -386,6 +343,8 @@ class VisualIdentityService(BaseService):
         
         # 7. 提交
         await self.db_session.commit()
+        
+        logger.info(f"批量关键帧生成完成: 总计 {len(tasks)}, 成功 {success_count}, 失败 {failed_count}")
         
         return {
             "total": len(tasks),

@@ -2,10 +2,10 @@ import api, { get, post, put } from './api'
 
 export const movieService = {
     /**
-     * 为章节启动剧本生成任务
+     * 从章节提取场景（新架构）
      */
-    generateScript(chapterId, data) {
-        return post(`/movie/chapters/${chapterId}/script`, data)
+    extractScenes(chapterId, data) {
+        return post(`/movie/chapters/${chapterId}/scenes`, data)
     },
 
     /**
@@ -30,13 +30,6 @@ export const movieService = {
     },
 
     /**
-     * 启动分镜视频生产
-     */
-    produceShot(shotId, data) {
-        return post(`/movie/shots/${shotId}/produce`, data)
-    },
-
-    /**
      * 生成角色头像
      */
     generateCharacterAvatar(characterId, data) {
@@ -44,52 +37,10 @@ export const movieService = {
     },
 
     /**
-     * 为剧本批量生成分镜首帧
+     * 批量生成角色定妆照
      */
-    generateKeyframes(scriptId, data) {
-        return post(`/movie/scripts/${scriptId}/generate-keyframes`, data)
-    },
-
-    /**
-     * 批量启动分镜视频生产
-     */
-    batchProduceVideos(scriptId, data) {
-        return post(`/movie/scripts/${scriptId}/batch-produce`, data)
-    },
-
-    /**
-     * 重新生成单个分镜首帧
-     */
-    regenerateKeyframe(shotId, data) {
-        return post(`/movie/shots/${shotId}/regenerate-keyframe`, data)
-    },
-
-    /**
-     * 重新生成单个分镜尾帧
-     */
-    regenerateLastFrame(shotId, data) {
-        return post(`/movie/shots/${shotId}/regenerate-last-frame`, data)
-    },
-
-    /**
-     * 重新生成单个分镜视频
-     */
-    regenerateVideo(shotId, data) {
-        return post(`/movie/shots/${shotId}/regenerate-video`, data)
-    },
-
-    /**
-     * 检查剧本完成度
-     */
-    checkScriptCompletion(scriptId) {
-        return get(`/movie/scripts/${scriptId}/completion-status`)
-    },
-
-    /**
-     * 准备章节素材（推进状态）
-     */
-    prepareChapterMaterials(chapterId) {
-        return post(`/movie/chapters/${chapterId}/prepare-materials`)
+    batchGenerateAvatars(projectId, data) {
+        return post(`/movie/projects/${projectId}/characters/batch-generate`, data)
     },
 
     /**
@@ -100,10 +51,38 @@ export const movieService = {
     },
 
     /**
-     * 批量生成角色定妆照
+     * 从剧本提取分镜
      */
-    batchGenerateAvatars(projectId, data) {
-        return post(`/movie/projects/${projectId}/characters/batch-generate`, data)
+    extractShots(scriptId, data) {
+        return post(`/movie/scripts/${scriptId}/extract-shots`, data)
+    },
+
+    /**
+     * 为剧本批量生成分镜关键帧
+     */
+    generateKeyframes(scriptId, data) {
+        return post(`/movie/scripts/${scriptId}/generate-keyframes`, data)
+    },
+
+    /**
+     * 创建过渡视频记录
+     */
+    createTransitions(scriptId, data) {
+        return post(`/movie/scripts/${scriptId}/create-transitions`, data)
+    },
+
+    /**
+     * 批量生成过渡视频
+     */
+    generateTransitionVideos(scriptId, data) {
+        return post(`/movie/scripts/${scriptId}/generate-transition-videos`, data)
+    },
+
+    /**
+     * 生成单个过渡视频
+     */
+    generateSingleTransition(transitionId, data) {
+        return post(`/movie/transitions/${transitionId}/generate-video`, data)
     },
 
     /**

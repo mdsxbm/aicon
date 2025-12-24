@@ -39,7 +39,7 @@ class MovieService(BaseService):
 
     async def create_script_task(self, chapter_id: str, api_key_id: str, model: Optional[str] = None):
         """
-        创建剧本生成任务
+        创建场景提取任务（新架构：只提取场景，不提取分镜）
         如果已存在剧本，将其删除以避免重复
         """
         # 查找现有剧本
@@ -52,8 +52,8 @@ class MovieService(BaseService):
             await self.db_session.commit()
             logger.info(f"Deleted existing script {existing_script.id} for chapter {chapter_id}")
         
-        from src.tasks.movie import movie_generate_script
-        task = movie_generate_script.delay(chapter_id, api_key_id, model)
+        from src.tasks.movie import movie_extract_scenes
+        task = movie_extract_scenes.delay(chapter_id, api_key_id, model)
         return task.id
 
     async def list_characters(self, project_id: str) -> List[MovieCharacter]:

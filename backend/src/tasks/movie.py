@@ -114,68 +114,13 @@ async def movie_generate_keyframes(db_session: AsyncSession, self, script_id: st
     logger.info(f"Celery任务完成: movie_generate_keyframes")
     return stats
 
-@celery_app.task(
-    bind=True,
-    max_retries=0,
-    name="movie.batch_produce_shots"
-)
-@async_task_decorator
-async def movie_batch_produce_shots(db_session: AsyncSession, self, script_id: str, api_key_id: str, model: str = "veo_3_1-fast"):
-    """批量生产镜头的 Celery 任务"""
-    from src.services.movie_production import MovieProductionService
-    logger.info(f"Celery任务开始: movie_batch_produce_shots (script_id={script_id})")
-    
-    service = MovieProductionService(db_session)
-    stats = await service.batch_produce_shot_videos(script_id, api_key_id, model)
-    
-    logger.info(f"Celery任务完成: movie_batch_produce_shots")
-    return stats
+# Removed: movie_batch_produce_shots - obsolete, replaced by transition workflow
 
-@celery_app.task(
-    bind=True,
-    max_retries=0,
-    name="movie.regenerate_keyframe"
-)
-@async_task_decorator
-async def movie_regenerate_keyframe(db_session: AsyncSession, self, shot_id: str, api_key_id: str, model: str = None):
-    """重新生成关键帧的 Celery 任务"""
-    from src.services.visual_identity_service import VisualIdentityService
-    logger.info(f"Celery任务开始: movie_regenerate_keyframe (shot_id={shot_id})")
-    
-    service = VisualIdentityService(db_session)
-    url = await service.regenerate_shot_keyframe(shot_id, api_key_id, model)
-    
-    logger.info(f"Celery任务完成: movie_regenerate_keyframe")
-    return {"first_frame_url": url}
+# Removed: movie_regenerate_keyframe - obsolete, shots now only have single keyframe
 
-@celery_app.task(
-    bind=True,
-    max_retries=0,
-    name="movie.regenerate_last_frame"
-)
-@async_task_decorator
-async def movie_regenerate_last_frame(db_session: AsyncSession, self, shot_id: str, api_key_id: str, model: str = None):
-    """重新生成最后一帧的 Celery 任务"""
-    from src.services.visual_identity_service import VisualIdentityService
-    logger.info(f"Celery任务开始: movie_regenerate_last_frame (shot_id={shot_id})")
-    
-    service = VisualIdentityService(db_session)
-    url = await service.generate_shot_last_frame(shot_id, api_key_id, model)
-    
-    logger.info(f"Celery任务完成: movie_regenerate_last_frame")
-    return {"last_frame_url": url}
+# Removed: movie_regenerate_last_frame - obsolete, shots now only have single keyframe
 
-@celery_app.task(name="movie.sync_all_video_task_status")
-@async_task_decorator
-async def sync_all_video_task_status(db_session: AsyncSession):
-    """[Periodic Task] 同步所有处理中的视频任务"""
-    from src.services.movie_production import MovieProductionService
-    logger.info("Celery定时任务开始: sync_all_video_task_status")
-    
-    service = MovieProductionService(db_session)
-    result = await service.sync_all_video_tasks()
-    
-    return result
+# Removed: sync_all_video_task_status - obsolete, replaced by transition video status sync
 
 @celery_app.task(
     bind=True,
