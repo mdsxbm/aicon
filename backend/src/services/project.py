@@ -183,6 +183,9 @@ class ProjectService(BaseService):
                     if not safe_title:
                         safe_title = "project"
 
+                    # 确保文件指针在开头
+                    f.seek(0)
+                    
                     upload_file = UploadFile(
                         filename=f"{safe_title}.txt",
                         file=f

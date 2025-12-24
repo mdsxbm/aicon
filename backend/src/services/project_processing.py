@@ -378,11 +378,16 @@ class ProjectProcessingService(BaseService):
         file_type = project.file_type
         handler = get_file_handler(file_type)
 
-        # 创建临时文件处理
+        # 创建临时文件并写入数据
         suffix = Path(project.file_path).suffix
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as fp:
-            fp.write(data)
-            temp_path = fp.name
+        temp_path = None
+        
+        try:
+            # 使用 with 语句确保文件正确关闭
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as fp:
+                fp.write(data)
+                temp_path = fp.name
+            # 文件在这里已经关闭,可以安全读取
 
             try:
                 # 尝试使用文件处理器读取
@@ -392,19 +397,24 @@ class ProjectProcessingService(BaseService):
             except Exception as e:
                 # 如果文件处理器失败，尝试直接解码
                 logger.warning(f"文件处理器读取失败，尝试直接解码: {e}")
-                try:
-                    content = decode_file_content(data, project.file_path)
-                    logger.info(f"成功解码文件 {project.file_path}，内容长度: {len(content)}")
-                    return content
-                except Exception as decode_error:
-                    logger.error(f"无法解码文件 {project.file_path}: {decode_error}")
-                    raise ValueError(f"无法解码文件: {project.file_path}")
-                # 清理临时文件
+                content = decode_file_content(data, project.file_path)
+                logger.info(f"成功解码文件 {project.file_path}，内容长度: {len(content)}")
+                return content
+                
+        except Exception as e:
+            logger.error(f"无法读取或解码文件 {project.file_path}: {e}")
+            raise ValueError(f"无法读取文件: {project.file_path}")
+        finally:
+            # 清理临时文件
+            if temp_path:
                 try:
                     import os
-                    os.unlink(temp_path)
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
+                        logger.debug(f"清理临时文件: {temp_path}")
                 except Exception as cleanup_error:
                     logger.warning(f"清理临时文件失败: {cleanup_error}")
+
 
     async def mark_failed_safely(self, project_id: str, owner_id: str, message: str) -> None:
         """
