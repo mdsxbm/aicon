@@ -4,10 +4,11 @@ import { useCharacterWorkflow } from './useCharacterWorkflow'
 import { useSceneWorkflow } from './useSceneWorkflow'
 import { useShotWorkflow } from './useShotWorkflow'
 import { useTransitionWorkflow } from './useTransitionWorkflow'
+import apiKeysService from '@/services/apiKeys'
 
 /**
  * 电影工作流主控制器
- * 遵循架构：不传递api实例，让子workflow自己使用service
+ * 完全参照 useDirectorEngine 的实现方式
  */
 export function useMovieWorkflow() {
     const route = useRoute()
@@ -17,6 +18,7 @@ export function useMovieWorkflow() {
     const projectId = ref(route.params.projectId || null)
     const currentStep = ref(0)
     const loading = ref(false)
+    const apiKeys = ref([])
 
     console.log('useMovieWorkflow init:', {
         chapterId: selectedChapterId.value,
@@ -24,11 +26,18 @@ export function useMovieWorkflow() {
         routeParams: route.params
     })
 
-    // Initialize workflows - 不传递api实例
+    // Initialize workflows
     const characterWorkflow = useCharacterWorkflow(projectId)
     const sceneWorkflow = useSceneWorkflow()
     const shotWorkflow = useShotWorkflow(sceneWorkflow.script)
     const transitionWorkflow = useTransitionWorkflow()
+
+    // 加载API Keys - 完全照搬 useDirectorEngine 的实现
+    const loadApiKeys = async () => {
+        const res = await apiKeysService.getAPIKeys()
+        apiKeys.value = res.api_keys || []
+        console.log('Loaded API keys:', apiKeys.value)
+    }
 
     // Computed states
     const canExtractScenes = computed(() => {
@@ -71,24 +80,26 @@ export function useMovieWorkflow() {
 
     // Load initial data
     const loadData = async () => {
-        if (!selectedChapterId.value || !projectId.value) {
-            console.warn('Cannot load data: missing chapterId or projectId')
+        if (!projectId.value) {
+            console.warn('Cannot load data: missing projectId')
             return
         }
 
         loading.value = true
         try {
-            // Load characters
+            // Always load characters first
             await characterWorkflow.loadCharacters()
 
-            // Try to load script if it exists
-            try {
-                await sceneWorkflow.loadScript(selectedChapterId.value)
-                if (sceneWorkflow.script.value) {
-                    await transitionWorkflow.loadTransitions(sceneWorkflow.script.value.id)
+            // Try to load script if chapter is selected
+            if (selectedChapterId.value) {
+                try {
+                    await sceneWorkflow.loadScript(selectedChapterId.value)
+                    if (sceneWorkflow.script.value) {
+                        await transitionWorkflow.loadTransitions(sceneWorkflow.script.value.id)
+                    }
+                } catch (error) {
+                    console.log('No script found for this chapter yet')
                 }
-            } catch (error) {
-                console.log('No script found for this chapter yet')
             }
 
             determineCurrentStep()
@@ -125,9 +136,14 @@ export function useMovieWorkflow() {
         }
     }, { deep: true })
 
-    onMounted(() => {
-        if (selectedChapterId.value && projectId.value) {
-            loadData()
+    // onMounted - 完全照搬 useDirectorEngine 的顺序
+    onMounted(async () => {
+        // 先加载 API keys
+        await loadApiKeys()
+
+        // 再加载数据
+        if (projectId.value) {
+            await loadData()
         }
     })
 
@@ -137,6 +153,7 @@ export function useMovieWorkflow() {
         projectId,
         currentStep,
         loading,
+        apiKeys,
 
         // Workflows
         characterWorkflow,

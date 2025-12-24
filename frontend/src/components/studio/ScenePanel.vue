@@ -7,7 +7,7 @@
           type="primary"
           :loading="extracting"
           :disabled="!canExtract"
-          @click="$emit('extract-scenes')"
+          @click="handleExtractClick"
         >
           提取场景
         </el-button>
@@ -44,13 +44,57 @@
         </el-collapse-item>
       </el-collapse>
     </div>
+
+    <!-- API Key选择对话框 -->
+    <el-dialog
+      v-model="showDialog"
+      title="提取场景"
+      width="500px"
+    >
+      <el-form :model="formData" label-width="100px">
+        <el-form-item label="API Key">
+          <el-select v-model="formData.apiKeyId" placeholder="请选择API Key" style="width: 100%">
+            <el-option
+              v-for="key in apiKeys"
+              :key="key.id"
+              :label="`${key.name} (${key.provider})`"
+              :value="key.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="模型">
+          <el-select 
+            v-model="formData.model" 
+            placeholder="选择模型" 
+            style="width: 100%"
+            :loading="loadingModels"
+            filterable
+            allow-create
+            default-first-option
+          >
+            <el-option
+              v-for="model in modelOptions"
+              :key="model"
+              :label="model"
+              :value="model"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleDialogConfirm" :disabled="!formData.apiKeyId || !formData.model">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import api from '@/services/api'
 
-defineProps({
+const props = defineProps({
   scenes: {
     type: Array,
     default: () => []
@@ -62,12 +106,66 @@ defineProps({
   canExtract: {
     type: Boolean,
     default: true
+  },
+  apiKeys: {
+    type: Array,
+    default: () => []
   }
 })
 
-defineEmits(['extract-scenes'])
+const emit = defineEmits(['extract-scenes'])
 
 const activeScenes = ref([])
+const showDialog = ref(false)
+const formData = ref({
+  apiKeyId: '',
+  model: ''
+})
+const modelOptions = ref([])
+const loadingModels = ref(false)
+
+// 监听API Key变化，自动加载模型列表 - 完全照搬BatchGenerateImagesDialog
+watch(() => formData.value.apiKeyId, async (newKeyId) => {
+  if (!newKeyId) {
+    modelOptions.value = []
+    formData.value.model = ''
+    return
+  }
+  
+  loadingModels.value = true
+  try {
+    const models = await api.get(`/api-keys/${newKeyId}/models?type=text`)
+    modelOptions.value = models || []
+    if (modelOptions.value.length > 0) {
+      formData.value.model = modelOptions.value[0]
+    } else {
+      formData.value.model = ''
+    }
+  } catch (error) {
+    console.error('获取模型列表失败', error)
+    ElMessage.warning('获取模型列表失败')
+    modelOptions.value = []
+    formData.value.model = ''
+  } finally {
+    loadingModels.value = false
+  }
+})
+
+const handleExtractClick = () => {
+  formData.value = {
+    apiKeyId: props.apiKeys[0]?.id || '',
+    model: ''
+  }
+  showDialog.value = true
+}
+
+const handleDialogConfirm = () => {
+  if (!formData.value.apiKeyId || !formData.value.model) {
+    return
+  }
+  emit('extract-scenes', formData.value.apiKeyId, formData.value.model)
+  showDialog.value = false
+}
 </script>
 
 <style scoped>

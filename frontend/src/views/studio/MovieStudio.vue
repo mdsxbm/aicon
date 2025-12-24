@@ -127,22 +127,15 @@ import TransitionPanel from '@/components/studio/TransitionPanel.vue'
 import StudioDialogs from '@/components/studio/StudioDialogs.vue'
 
 import { useMovieWorkflow } from '@/composables/useMovieWorkflow'
-import apiKeysService from '@/services/apiKeys'
 
 const route = useRoute()
 
-// 从URL获取projectId - 这是关键！
-const projectId = computed(() => {
-  // 优先从query获取，其次从route.params
-  return route.query.projectId || route.params.projectId || null
-})
-
-console.log('MovieStudio mounted, projectId:', projectId.value, 'route:', route)
-
 const {
+  projectId,
   selectedChapterId,
   currentStep,
   loading,
+  apiKeys,
   characterWorkflow,
   sceneWorkflow,
   shotWorkflow,
@@ -156,24 +149,14 @@ const {
   goBack
 } = useMovieWorkflow()
 
+console.log('MovieStudio apiKeys from composable:', apiKeys.value)
+
 // Dialog states
 const showCharacterDialog = ref(false)
 const showSceneDialog = ref(false)
 const showShotDialog = ref(false)
 const showKeyframeDialog = ref(false)
 const showTransitionDialog = ref(false)
-
-// API Keys
-const apiKeys = ref([])
-
-const loadApiKeys = async () => {
-  try {
-    const response = await apiKeysService.getAPIKeys()
-    apiKeys.value = response.api_keys || []
-  } catch (error) {
-    console.error('Failed to load API keys:', error)
-  }
-}
 
 // Event handlers
 const handleStepChange = (step) => {
