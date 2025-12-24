@@ -4,12 +4,14 @@
 
 from typing import Optional, List
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.movie import MovieScript, MovieScene, MovieShot, MovieCharacter, ScriptStatus
+from src.models.chapter import Chapter
 from src.core.logging import get_logger
 from src.services.base import BaseService
+from src.services.keyframe_prompt_builder import KeyframePromptBuilder
 
 logger = get_logger(__name__)
 
@@ -17,17 +19,50 @@ class MovieService(BaseService):
     def __init__(self, db_session: AsyncSession):
         super().__init__(db_session)
 
-    async def get_script(self, chapter_id: str) -> Optional[MovieScript]:
-        """
-        获取章节关联的剧本详情
-        包含场景和分镜的完整层级结构
-        """
-        stmt = select(MovieScript).where(MovieScript.chapter_id == chapter_id).where(MovieScript.status == ScriptStatus.COMPLETED).options(
-            selectinload(MovieScript.scenes).selectinload(MovieScene.shots)
-        )
+    async def get_script(self, chapter_id: str):
+        """获取章节的剧本（包含场景和分镜）"""
         
+        # 1. 获取剧本及其关联数据
+        stmt = (
+            select(MovieScript)
+            .join(MovieScript.chapter)
+            .where(MovieScript.chapter.has(id=chapter_id))
+            .options(
+                selectinload(MovieScript.scenes).selectinload(MovieScene.shots),
+                joinedload(MovieScript.chapter).joinedload(Chapter.project)
+            )
+        )
         result = await self.db_session.execute(stmt)
-        return result.scalars().first()
+        script = result.scalar_one_or_none()
+        
+        if not script:
+            return None
+        
+        # 2. 获取项目的所有角色（用于生成提示词）
+        project_id = script.chapter.project_id
+        stmt_chars = select(MovieCharacter).where(MovieCharacter.project_id == project_id)
+        chars_result = await self.db_session.execute(stmt_chars)
+        characters = list(chars_result.scalars().all())
+        
+        # 3. 为每个shot生成专业提示词
+        
+        for scene in script.scenes:
+            for shot in scene.shots:
+                # 生成专业提示词并附加到shot对象
+                try:
+                    prompt = KeyframePromptBuilder.build_prompt(
+                        shot=shot,
+                        scene=scene,
+                        characters=characters,
+                        custom_prompt=None
+                    )
+                    # 动态添加属性（不保存到数据库，仅用于API响应）
+                    shot.generated_prompt = prompt
+                except Exception as e:
+                    logger.error(f"生成shot {shot.id} 提示词失败: {e}")
+                    shot.generated_prompt = shot.shot  # 降级为原始描述
+        
+        return script
 
     async def get_script_by_id(self, script_id: str) -> Optional[MovieScript]:
         """

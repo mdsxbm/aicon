@@ -114,6 +114,13 @@ async def _extract_image_bytes(result: Any) -> Tuple[bytes, str]:
             base64_data = image_data.b64_json
             mime_type = getattr(image_data, 'mime', 'image/png')
             logger.info(f"使用 b64_json 格式, MIME: {mime_type}")
+            
+            # 修复base64 padding问题
+            # 确保base64字符串长度是4的倍数
+            missing_padding = len(base64_data) % 4
+            if missing_padding:
+                base64_data += '=' * (4 - missing_padding)
+            
             image_bytes = base64.b64decode(base64_data)
             return image_bytes, mime_type
         

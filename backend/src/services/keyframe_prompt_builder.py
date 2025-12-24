@@ -1,0 +1,140 @@
+"""
+关键帧生成提示词构建器
+"""
+from typing import List, Optional
+from src.models.movie import MovieShot, MovieScene, MovieCharacter
+
+
+class KeyframePromptBuilder:
+    """
+    关键帧生成提示词构建器
+    强调真人电影风格，避免3D/CGI效果
+    """
+    
+    # 核心风格指令 - 强调真人摄影
+    CORE_STYLE = """
+CRITICAL STYLE REQUIREMENTS:
+- This MUST be a LIVE-ACTION PHOTOGRAPH, not 3D render, not CGI, not animation
+- Real human actors in real physical locations
+- Captured with professional cinema cameras (ARRI, RED, Sony Venice)
+- Natural lighting and practical effects only
+- Photorealistic skin texture, fabric detail, environmental elements
+- Film grain and depth of field characteristic of cinema photography
+"""
+
+    # 技术规格
+    TECHNICAL_SPECS = """
+Technical Specifications:
+- Shot on 35mm film or high-end digital cinema camera
+- Cinematic color grading (film look, not digital/game look)
+- Professional cinematography with intentional composition
+- Natural depth of field and bokeh
+- Realistic lighting (practical lights, natural light, or professional film lighting)
+"""
+
+    # 禁止的元素
+    FORBIDDEN_ELEMENTS = """
+ABSOLUTELY FORBIDDEN:
+- NO 3D rendering artifacts
+- NO CGI character models
+- NO video game aesthetics
+- NO anime or cartoon styles
+- NO artificial/synthetic looking imagery
+- NO obvious digital manipulation
+"""
+
+    @staticmethod
+    def build_prompt(
+        shot: MovieShot,
+        scene: MovieScene,
+        characters: List[MovieCharacter],
+        custom_prompt: Optional[str] = None
+    ) -> str:
+        """
+        构建关键帧生成提示词
+        
+        Args:
+            shot: 分镜对象
+            scene: 场景对象
+            characters: 角色列表
+            custom_prompt: 自定义提示词（如果提供则直接使用）
+            
+        Returns:
+            完整的提示词
+        """
+        if custom_prompt:
+            # 如果有自定义提示词，仍然添加风格约束
+            return f"{custom_prompt}\n\n{KeyframePromptBuilder.CORE_STYLE}"
+        
+        # 1. 场景上下文
+        scene_context = KeyframePromptBuilder._build_scene_context(scene)
+        
+        # 2. 分镜描述
+        shot_description = shot.shot or "A cinematic shot"
+        
+        # 3. 角色信息
+        character_context = KeyframePromptBuilder._build_character_context(shot, characters)
+        
+        # 4. 对白提示（如果有）
+        dialogue_hint = ""
+        if shot.dialogue:
+            dialogue_hint = f"\nDialogue context: {shot.dialogue[:100]}"
+        
+        # 组合完整提示词
+        full_prompt = f"""
+{KeyframePromptBuilder.CORE_STYLE}
+
+SCENE CONTEXT:
+{scene_context}
+
+SHOT DESCRIPTION:
+{shot_description}
+{dialogue_hint}
+
+{character_context}
+
+{KeyframePromptBuilder.TECHNICAL_SPECS}
+
+{KeyframePromptBuilder.FORBIDDEN_ELEMENTS}
+
+Remember: This is a REAL PHOTOGRAPH from a LIVE-ACTION FILM, not a digital creation.
+"""
+        return full_prompt.strip()
+    
+    @staticmethod
+    def _build_scene_context(scene: MovieScene) -> str:
+        """构建场景上下文"""
+        scene_info = scene.scene or "A scene"
+        
+        # 提取场景关键信息
+        context = f"Location and Setting: {scene_info}"
+        
+        return context
+    
+    @staticmethod
+    def _build_character_context(shot: MovieShot, characters: List[MovieCharacter]) -> str:
+        """构建角色上下文"""
+        if not shot.characters or not characters:
+            return ""
+        
+        # 获取出现在此镜头中的角色
+        shot_char_names = shot.characters if isinstance(shot.characters, list) else []
+        relevant_chars = [c for c in characters if c.name in shot_char_names]
+        
+        if not relevant_chars:
+            return ""
+        
+        char_descriptions = []
+        for char in relevant_chars:
+            desc = f"- {char.name}"
+            if char.visual_traits:
+                desc += f": {char.visual_traits}"
+            char_descriptions.append(desc)
+        
+        if char_descriptions:
+            return f"CHARACTERS IN SHOT (Real actors):\n" + "\n".join(char_descriptions)
+        
+        return ""
+
+
+__all__ = ["KeyframePromptBuilder"]

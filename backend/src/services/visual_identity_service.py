@@ -47,18 +47,18 @@ async def _generate_keyframe_worker(
     
     async with semaphore:
         try:
-            # 1. 构建 Prompt (包含角色信息)
-            base_prompt = shot.shot
+            # 1. 构建专业提示词（包含场景、分镜、角色信息）
+            from src.services.keyframe_prompt_builder import KeyframePromptBuilder
             
-            character_context = ""
-            # 从shot.characters字段获取角色列表
-            shot_characters = shot.characters if hasattr(shot, 'characters') and shot.characters else []
+            # 获取场景信息（shot已经预加载了scene关系）
+            scene = shot.scene
             
-            for char in chars:
-                if char.name in shot_characters:
-                    character_context += f" Character {char.name}: {char.visual_traits}."
-
-            final_prompt = f"{base_prompt}. {character_context}. Cinematic movie still, 8k, highly detailed, photorealistic, dramatic lighting."
+            final_prompt = KeyframePromptBuilder.build_prompt(
+                shot=shot,
+                scene=scene,
+                characters=chars,
+                custom_prompt=None  # worker中不使用自定义提示词
+            )
             
             # 2. Provider 调用
             img_provider = ProviderFactory.create(
@@ -310,14 +310,38 @@ class VisualIdentityService(BaseService):
             base_url=api_key.base_url
         )
         
-        # 4. 生成图像提示词（如果没有自定义）
-        if not prompt:
-            prompt = shot.shot
+        # 4. 生成图像提示词
+        # 单个生成时：前端应该先调用构建器生成专业提示词，用户调整后传递过来
+        # 如果前端传递了prompt，直接使用（用户已调整）
+        # 如果没有传递，使用构建器生成（兜底逻辑）
+        if prompt:
+            # 前端传递的提示词（用户已调整）
+            final_prompt = prompt
+            logger.info(f"使用前端传递的自定义提示词（长度: {len(prompt)}字符）")
+        else:
+            # 兜底：使用构建器生成专业提示词
+            from src.services.keyframe_prompt_builder import KeyframePromptBuilder
+            from src.models.movie import MovieCharacter
+            from sqlalchemy import select
+            
+            # 获取角色列表
+            project_id = shot.scene.script.chapter.project_id
+            stmt_chars = select(MovieCharacter).where(MovieCharacter.project_id == project_id)
+            chars_result = await self.db_session.execute(stmt_chars)
+            chars = chars_result.scalars().all()
+            
+            final_prompt = KeyframePromptBuilder.build_prompt(
+                shot=shot,
+                scene=shot.scene,
+                characters=list(chars),
+                custom_prompt=None
+            )
+            logger.info(f"使用构建器生成的专业提示词（长度: {len(final_prompt)}字符）")
         
         # 5. 生成图像
         logger.info(f"开始生成关键帧: shot_id={shot_id}, model={model}")
         result = await provider.generate_image(
-            prompt=prompt,
+            prompt=final_prompt,
             model=model
         )
         

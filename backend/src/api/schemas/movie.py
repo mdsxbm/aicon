@@ -3,6 +3,7 @@
 """
 
 from typing import List, Optional
+import uuid
 from pydantic import BaseModel, UUID4, Field, field_validator
 from datetime import datetime, timedelta
 from src.utils.storage import storage_client
@@ -36,12 +37,25 @@ class ShotBase(BaseModel):
         return v
 
 class MovieShotBase(BaseModel):
-    id: UUID4
+    scene_id: UUID4
     order_index: int
     shot: str
     dialogue: Optional[str] = None
-    characters: List[str] = []
+    characters: Optional[List[str]] = None
     keyframe_url: Optional[str] = None
+    
+    @field_validator("scene_id", mode="before")
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+
+class MovieShotResponse(MovieShotBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+    generated_prompt: Optional[str] = None  # 专业提示词（用于前端显示和调整）
     
     class Config:
         from_attributes = True
