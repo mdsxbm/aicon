@@ -43,7 +43,7 @@
         </div>
       </div>
       
-      <div v-if="filteredChapters.length === 0" class="empty-state">
+      <div v-if="filteredChapters.length === 0 && !loading" class="empty-state">
         无匹配章节
       </div>
     </div>
@@ -54,7 +54,6 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import api from '@/services/api'
 import chaptersService from '@/services/chapters'
 
 const props = defineProps({
@@ -121,26 +120,41 @@ const formatDate = (date) => {
 }
 
 const fetchChapters = async () => {
-  if (!props.projectId) return
+  if (!props.projectId) {
+    console.warn('ChapterSelector: No projectId provided')
+    return
+  }
   
   try {
     loading.value = true
-    const response = await chaptersService.getChapters(props.projectId)
+    console.log('Fetching chapters for project:', props.projectId)
+    
+    // 使用chaptersService统一接口，它会自动带上认证token
+    const response = await chaptersService.getChapters(props.projectId, {
+      page: 1,
+      size: 100
+    })
+    
+    // chaptersService返回的格式是 { chapters: [...], total: N }
     chapters.value = response.chapters || []
+    console.log('Loaded chapters:', chapters.value.length, chapters.value)
   } catch (error) {
     console.error('Failed to fetch chapters:', error)
+    chapters.value = []
   } finally {
     loading.value = false
   }
 }
 
 watch(() => props.projectId, (newId) => {
+  console.log('ProjectId changed in ChapterSelector:', newId)
   if (newId) {
     fetchChapters()
   }
 }, { immediate: true })
 
 onMounted(() => {
+  console.log('ChapterSelector mounted, projectId:', props.projectId)
   if (props.projectId) {
     fetchChapters()
   }

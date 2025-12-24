@@ -10,7 +10,7 @@ export function useCharacterWorkflow(projectId, db) {
     const loadCharacters = async () => {
         if (!projectId.value) return
         try {
-            const response = await db.get(`/api/v1/movie/projects/${projectId.value}/characters`)
+            const response = await db.get(`/movie/projects/${projectId.value}/characters`)
             characters.value = response.data || []
         } catch (error) {
             console.error('Failed to load characters:', error)
@@ -20,7 +20,7 @@ export function useCharacterWorkflow(projectId, db) {
     const extractCharacters = async (scriptId, apiKeyId, model) => {
         extracting.value = true
         try {
-            const response = await db.post(`/api/v1/movie/scripts/${scriptId}/extract-characters`, {
+            const response = await db.post(`/movie/scripts/${scriptId}/extract-characters`, {
                 api_key_id: apiKeyId,
                 model
             })
@@ -46,7 +46,7 @@ export function useCharacterWorkflow(projectId, db) {
     const generateAvatar = async (characterId, apiKeyId, model, prompt, style) => {
         generatingAvatarId.value = characterId
         try {
-            const response = await db.post(`/api/v1/movie/characters/${characterId}/generate`, {
+            const response = await db.post(`/movie/characters/${characterId}/generate`, {
                 api_key_id: apiKeyId,
                 model,
                 prompt,
@@ -73,7 +73,7 @@ export function useCharacterWorkflow(projectId, db) {
 
     const batchGenerateAvatars = async (apiKeyId, model) => {
         try {
-            const response = await db.post(`/api/v1/movie/projects/${projectId.value}/characters/batch-generate`, {
+            const response = await db.post(`/movie/projects/${projectId.value}/characters/batch-generate`, {
                 api_key_id: apiKeyId,
                 model
             })
@@ -95,7 +95,7 @@ export function useCharacterWorkflow(projectId, db) {
 
     const deleteCharacter = async (characterId) => {
         try {
-            await db.delete(`/api/v1/movie/characters/${characterId}`)
+            await db.delete(`/movie/characters/${characterId}`)
             ElMessage.success('角色已删除')
             await loadCharacters()
         } catch (error) {

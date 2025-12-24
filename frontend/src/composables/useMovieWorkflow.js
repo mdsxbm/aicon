@@ -11,9 +11,16 @@ export function useMovieWorkflow() {
     const router = useRouter()
 
     const selectedChapterId = ref(route.params.chapterId || null)
-    const projectId = ref(route.query.projectId || null)
+    // 从route.params获取projectId（路由中定义的参数）
+    const projectId = ref(route.params.projectId || null)
     const currentStep = ref(0)
     const loading = ref(false)
+
+    console.log('useMovieWorkflow init:', {
+        chapterId: selectedChapterId.value,
+        projectId: projectId.value,
+        routeParams: route.params
+    })
 
     // Initialize workflows
     const characterWorkflow = useCharacterWorkflow(projectId, api)
@@ -60,19 +67,27 @@ export function useMovieWorkflow() {
         }
     }
 
-    // Load all data
+    // Load initial data (only characters, not script)
     const loadData = async () => {
-        if (!selectedChapterId.value) return
+        if (!selectedChapterId.value || !projectId.value) {
+            console.warn('Cannot load data: missing chapterId or projectId')
+            return
+        }
 
         loading.value = true
         try {
-            await Promise.all([
-                characterWorkflow.loadCharacters(),
-                sceneWorkflow.loadScript(selectedChapterId.value)
-            ])
+            // Only load characters initially
+            await characterWorkflow.loadCharacters()
 
-            if (sceneWorkflow.script.value) {
-                await transitionWorkflow.loadTransitions(sceneWorkflow.script.value.id)
+            // Try to load script if it exists, but don't fail if it doesn't
+            try {
+                await sceneWorkflow.loadScript(selectedChapterId.value)
+                if (sceneWorkflow.script.value) {
+                    await transitionWorkflow.loadTransitions(sceneWorkflow.script.value.id)
+                }
+            } catch (error) {
+                // Script doesn't exist yet, that's OK - user will create it
+                console.log('No script found for this chapter yet')
             }
 
             determineCurrentStep()
@@ -94,15 +109,23 @@ export function useMovieWorkflow() {
     // Watch for chapter changes
     watch(selectedChapterId, (newId) => {
         if (newId) {
-            if (route.params.chapterId !== newId) {
-                router.push({ name: 'MovieStudio', params: { chapterId: newId } })
-            }
             loadData()
         }
     })
 
+    // Watch for route changes
+    watch(() => route.params, (newParams) => {
+        console.log('Route params changed:', newParams)
+        if (newParams.projectId) {
+            projectId.value = newParams.projectId
+        }
+        if (newParams.chapterId) {
+            selectedChapterId.value = newParams.chapterId
+        }
+    }, { deep: true })
+
     onMounted(() => {
-        if (selectedChapterId.value) {
+        if (selectedChapterId.value && projectId.value) {
             loadData()
         }
     })

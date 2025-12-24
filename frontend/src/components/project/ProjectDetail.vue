@@ -339,7 +339,8 @@
         router.push({
           name: 'MovieStudio',
           params: { 
-            chapterId: chapters[0].id // 使用 chapterId 参数
+            projectId: props.projectId,
+            chapterId: chapters[0].id
           }
         })
       } else {

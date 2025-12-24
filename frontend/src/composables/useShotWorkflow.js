@@ -16,7 +16,7 @@ export function useShotWorkflow(script, db) {
     const extractShots = async (scriptId, apiKeyId, model) => {
         extracting.value = true
         try {
-            const response = await db.post(`/api/v1/movie/scripts/${scriptId}/extract-shots`, {
+            const response = await db.post(`/movie/scripts/${scriptId}/extract-shots`, {
                 api_key_id: apiKeyId,
                 model
             })
@@ -43,7 +43,7 @@ export function useShotWorkflow(script, db) {
     const generateKeyframes = async (scriptId, apiKeyId, model) => {
         generatingKeyframes.value = true
         try {
-            const response = await db.post(`/api/v1/movie/scripts/${scriptId}/generate-keyframes`, {
+            const response = await db.post(`/movie/scripts/${scriptId}/generate-keyframes`, {
                 api_key_id: apiKeyId,
                 model
             })

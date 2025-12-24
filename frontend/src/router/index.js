@@ -100,7 +100,7 @@ const routes = [
         props: true
       },
       {
-        path: '/chapters/:chapterId/movie-studio',
+        path: ':projectId/chapters/:chapterId/movie-studio',
         name: 'MovieStudio',
         component: () => import('@/views/studio/MovieStudio.vue'),
         meta: { title: '电影工作室' },
@@ -144,19 +144,6 @@ const routes = [
         path: '',
         name: 'BGMManagementPage',
         component: () => import('@/views/BGMManagement.vue')
-      }
-    ]
-  },
-  {
-    path: '/bilibili-accounts',
-    name: 'BilibiliAccounts',
-    component: MainLayout,
-    meta: { requiresAuth: true },
-    children: [
-      {
-        path: '',
-        name: 'BilibiliAccountsPage',
-        component: () => import('@/views/BilibiliAccounts.vue')
       }
     ]
   },

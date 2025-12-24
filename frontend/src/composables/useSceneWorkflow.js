@@ -9,7 +9,7 @@ export function useSceneWorkflow(db) {
     const loadScript = async (chapterId) => {
         if (!chapterId) return
         try {
-            const response = await db.get(`/api/v1/movie/chapters/${chapterId}/script`)
+            const response = await db.get(`/movie/chapters/${chapterId}/script`)
             script.value = response.data
         } catch (error) {
             console.error('Failed to load script:', error)
@@ -20,7 +20,7 @@ export function useSceneWorkflow(db) {
     const extractScenes = async (chapterId, apiKeyId, model) => {
         extracting.value = true
         try {
-            const response = await db.post(`/api/v1/movie/chapters/${chapterId}/scenes`, {
+            const response = await db.post(`/movie/chapters/${chapterId}/scenes`, {
                 api_key_id: apiKeyId,
                 model
             })

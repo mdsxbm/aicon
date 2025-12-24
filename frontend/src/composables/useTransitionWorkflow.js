@@ -16,7 +16,7 @@ export function useTransitionWorkflow(db) {
     const createTransitions = async (scriptId, apiKeyId, model) => {
         creating.value = true
         try {
-            const response = await db.post(`/api/v1/movie/scripts/${scriptId}/create-transitions`, {
+            const response = await db.post(`/movie/scripts/${scriptId}/create-transitions`, {
                 api_key_id: apiKeyId,
                 model
             })
@@ -42,7 +42,7 @@ export function useTransitionWorkflow(db) {
     const generateTransitionVideos = async (scriptId, apiKeyId, videoModel) => {
         generating.value = true
         try {
-            const response = await db.post(`/api/v1/movie/scripts/${scriptId}/generate-transition-videos`, {
+            const response = await db.post(`/movie/scripts/${scriptId}/generate-transition-videos`, {
                 api_key_id: apiKeyId,
                 video_model: videoModel
             })

@@ -14,6 +14,11 @@
       <div class="studio-header">
         <el-button icon="ArrowLeft" @click="goBack">返回</el-button>
         <h2>电影工作室</h2>
+        <div class="debug-info" v-if="!projectId">
+          <el-alert type="error" :closable="false">
+            缺少projectId参数，请从项目详情页进入
+          </el-alert>
+        </div>
       </div>
 
       <!-- 工作流步骤指示器 -->
@@ -79,16 +84,14 @@
           />
 
           <!-- 步骤5: 最终合成 -->
-          <div v-show="currentStep === 5" class="final-panel">
+          <div v-show="currentStep === 5" class="final-step">
             <el-result
               icon="success"
-              title="准备完成"
-              sub-title="所有素材已准备就绪，可以进行最终合成"
+              title="所有步骤已完成"
+              sub-title="可以开始最终合成了"
             >
               <template #extra>
-                <el-button type="primary" size="large">
-                  合成完整视频
-                </el-button>
+                <el-button type="primary" size="large">开始合成</el-button>
               </template>
             </el-result>
           </div>
@@ -96,22 +99,23 @@
       </div>
     </div>
 
-    <!-- 配置对话框 -->
+    <!-- 对话框组件 -->
     <StudioDialogs
-      v-model:visible="showDialog"
-      v-model:genConfig="genConfig"
-      :mode="dialogMode"
-      :api-keys="apiKeys"
-      :loading="dialogLoading"
-      @confirm="handleDialogConfirm"
+      v-model:character-dialog="showCharacterDialog"
+      v-model:scene-dialog="showSceneDialog"
+      v-model:shot-dialog="showShotDialog"
+      v-model:keyframe-dialog="showKeyframeDialog"
+      v-model:transition-dialog="showTransitionDialog"
     />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useMovieWorkflow } from '@/composables/useMovieWorkflow'
-import { apiKeysService } from '@/services/apiKeys'
+import { ref, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft } from '@element-plus/icons-vue'
+
 import ChapterSelector from '@/components/studio/ChapterSelector.vue'
 import WorkflowStepper from '@/components/studio/WorkflowStepper.vue'
 import CharacterPanel from '@/components/studio/CharacterPanel.vue'
@@ -121,9 +125,20 @@ import KeyframePanel from '@/components/studio/KeyframePanel.vue'
 import TransitionPanel from '@/components/studio/TransitionPanel.vue'
 import StudioDialogs from '@/components/studio/StudioDialogs.vue'
 
+import { useMovieWorkflow } from '@/composables/useMovieWorkflow'
+
+const route = useRoute()
+
+// 从URL获取projectId - 这是关键！
+const projectId = computed(() => {
+  // 优先从query获取，其次从route.params
+  return route.query.projectId || route.params.projectId || null
+})
+
+console.log('MovieStudio mounted, projectId:', projectId.value, 'route:', route)
+
 const {
   selectedChapterId,
-  projectId,
   currentStep,
   loading,
   characterWorkflow,
@@ -135,116 +150,82 @@ const {
   canGenerateKeyframes,
   canCreateTransitions,
   canGenerateTransitionVideos,
+  loadData,
   goBack
 } = useMovieWorkflow()
 
-// Dialog state
-const showDialog = ref(false)
-const dialogMode = ref('character')
-const dialogLoading = ref(false)
-const apiKeys = ref([])
-const genConfig = ref({
-  api_key_id: '',
-  model: '',
-  style: 'cinematic',
-  prompt: ''
-})
+// Dialog states
+const showCharacterDialog = ref(false)
+const showSceneDialog = ref(false)
+const showShotDialog = ref(false)
+const showKeyframeDialog = ref(false)
+const showTransitionDialog = ref(false)
 
-// Load API keys
-const loadApiKeys = async () => {
-  try {
-    const keys = await apiKeysService.getAPIKeys()
-    apiKeys.value = keys.api_keys || []
-  } catch (error) {
-    console.error('Failed to load API keys:', error)
+// Event handlers
+const handleExtractCharacters = async (scriptId, apiKeyId, model) => {
+  await characterWorkflow.extractCharacters(scriptId, apiKeyId, model)
+  await loadData()
+}
+
+const handleGenerateAvatar = async (characterId, apiKeyId, model, prompt, style) => {
+  await characterWorkflow.generateAvatar(characterId, apiKeyId, model, prompt, style)
+}
+
+const handleDeleteCharacter = async (characterId) => {
+  await characterWorkflow.deleteCharacter(characterId)
+}
+
+const handleBatchGenerateAvatars = async (apiKeyId, model) => {
+  await characterWorkflow.batchGenerateAvatars(apiKeyId, model)
+}
+
+const handleExtractScenes = async (chapterId, apiKeyId, model) => {
+  await sceneWorkflow.extractScenes(chapterId, apiKeyId, model)
+  await loadData()
+}
+
+const handleExtractShots = async (scriptId, apiKeyId, model) => {
+  await shotWorkflow.extractShots(scriptId, apiKeyId, model)
+  await loadData()
+}
+
+const handleGenerateKeyframes = async (scriptId, apiKeyId, model) => {
+  await shotWorkflow.generateKeyframes(scriptId, apiKeyId, model)
+  await loadData()
+}
+
+const handleCreateTransitions = async (scriptId, apiKeyId, model) => {
+  await transitionWorkflow.createTransitions(scriptId, apiKeyId, model)
+  await loadData()
+}
+
+const handleGenerateTransitionVideos = async (scriptId, apiKeyId, videoModel) => {
+  await transitionWorkflow.generateTransitionVideos(scriptId, apiKeyId, videoModel)
+  await loadData()
+}
+
+// Watch projectId changes
+watch(projectId, (newId) => {
+  console.log('ProjectId changed:', newId)
+  if (!newId) {
+    ElMessage.warning('缺少项目ID，请从项目详情页进入')
   }
-}
-
-loadApiKeys()
-
-// Handlers
-const handleExtractCharacters = () => {
-  dialogMode.value = 'character'
-  showDialog.value = true
-}
-
-const handleGenerateAvatar = (char) => {
-  // TODO: Implement avatar generation dialog
-  console.log('Generate avatar for:', char)
-}
-
-const handleDeleteCharacter = async (char) => {
-  await characterWorkflow.deleteCharacter(char.id)
-}
-
-const handleBatchGenerateAvatars = () => {
-  dialogMode.value = 'batch-avatars'
-  showDialog.value = true
-}
-
-const handleExtractScenes = () => {
-  dialogMode.value = 'scenes'
-  showDialog.value = true
-}
-
-const handleExtractShots = () => {
-  dialogMode.value = 'shots'
-  showDialog.value = true
-}
-
-const handleGenerateKeyframes = () => {
-  dialogMode.value = 'keyframes'
-  showDialog.value = true
-}
-
-const handleCreateTransitions = () => {
-  dialogMode.value = 'transitions'
-  showDialog.value = true
-}
-
-const handleGenerateTransitionVideos = () => {
-  dialogMode.value = 'transition-videos'
-  showDialog.value = true
-}
-
-const handleDialogConfirm = async () => {
-  const { api_key_id, model } = genConfig.value
-  
-  if (!api_key_id) {
-    return
-  }
-
-  showDialog.value = false
-
-  if (dialogMode.value === 'character') {
-    await characterWorkflow.extractCharacters(sceneWorkflow.script.value.id, api_key_id, model)
-  } else if (dialogMode.value === 'scenes') {
-    await sceneWorkflow.extractScenes(selectedChapterId.value, api_key_id, model)
-  } else if (dialogMode.value === 'shots') {
-    await shotWorkflow.extractShots(sceneWorkflow.script.value.id, api_key_id, model)
-  } else if (dialogMode.value === 'keyframes') {
-    await shotWorkflow.generateKeyframes(sceneWorkflow.script.value.id, api_key_id, model)
-  } else if (dialogMode.value === 'transitions') {
-    await transitionWorkflow.createTransitions(sceneWorkflow.script.value.id, api_key_id, model)
-  } else if (dialogMode.value === 'transition-videos') {
-    await transitionWorkflow.generateTransitionVideos(sceneWorkflow.script.value.id, api_key_id, 'veo_3_1-fast')
-  } else if (dialogMode.value === 'batch-avatars') {
-    await characterWorkflow.batchGenerateAvatars(api_key_id, model)
-  }
-}
+}, { immediate: true })
 </script>
 
 <style scoped>
 .movie-studio-layout {
   display: flex;
   height: 100vh;
-  overflow: hidden;
+  background: #f5f7fa;
 }
 
 .studio-sidebar-left {
-  width: 250px;
+  width: 280px;
   flex-shrink: 0;
-  height: 100%;
+  background: white;
+  border-right: 1px solid #e4e7ed;
+  overflow: hidden;
 }
 
 .studio-main {
@@ -252,16 +233,15 @@ const handleDialogConfirm = async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: #f5f7fa;
 }
 
 .studio-header {
+  padding: 16px 24px;
+  background: white;
+  border-bottom: 1px solid #e4e7ed;
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px 20px;
-  background: white;
-  border-bottom: 1px solid #e4e7ed;
 }
 
 .studio-header h2 {
@@ -270,17 +250,21 @@ const handleDialogConfirm = async () => {
   font-weight: 600;
 }
 
+.debug-info {
+  margin-left: auto;
+}
+
 .studio-body {
   flex: 1;
-  padding: 20px;
   overflow-y: auto;
+  padding: 24px;
 }
 
 .empty-selection {
-  display: flex;
-  justify-content: center;
-  align-items: center;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .workflow-content {
@@ -288,10 +272,7 @@ const handleDialogConfirm = async () => {
   margin: 0 auto;
 }
 
-.final-panel {
-  background: white;
-  border-radius: 8px;
-  padding: 40px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.final-step {
+  padding: 60px 0;
 }
 </style>
