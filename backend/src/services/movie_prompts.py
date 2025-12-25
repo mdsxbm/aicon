@@ -248,20 +248,54 @@ Negative Prompt: people, characters, humans, person, man, woman, child, face, bo
         return cls.SCENE_IMAGE_GENERATION.format(scene_description=scene_description)
 
     # 过渡视频提示词生成Prompt
-    TRANSITION_VIDEO = """你是一个专业的视频生成提示词专家。
-
-你的任务是：根据两个连续的电影分镜描述，生成一个流畅的过渡视频提示词。
+    TRANSITION_VIDEO = """你是一个专业的电影视频提示词生成专家。
+请根据以下两个分镜的描述，生成一个用于AI视频生成的英文提示词。
+这个提示词将用于生成两个分镜之间的过渡视频。
 
 要求：
 1. 提示词必须是英文
 2. 描述要具体、详细，包含动作、光影、环境等细节
 3. 确保两个分镜之间的过渡自然流畅
-4. 长度控制在100-200个单词
-5. 只输出提示词本身，不要包含任何解释或标记
+4. 只输出提示词本身，不要包含任何解释或标记
+5. 提示词开头明确视频中对话使用中文
+6. 场景中的声音和对话要使用自然语言描述
 
 两个分镜的描述：
 {combined_text}
-"""
+
+示例参考：
+
+示例1（室内对话场景）：
+输入：
+分镜1: 特写，李明坐在办公桌前，表情严肃
+对话: "这个项目必须在周五前完成"
+分镜2: 中景，王芳站起身，面露难色
+对话: "时间太紧了，我需要更多人手"
+
+输出：
+Cinematic transition video with Chinese dialogue. Close-up of Li Ming sitting at office desk with serious expression, saying "这个项目必须在周五前完成" in Chinese. Camera slowly pulls back revealing the modern office environment with soft overhead lighting. Wang Fang gradually comes into frame, standing up from her chair with a worried expression, responding "时间太紧了，我需要更多人手" in Chinese. Natural office ambience with subtle keyboard typing sounds. Smooth camera movement creating seamless flow between the two shots.
+
+示例2（动作场景）：
+输入：
+分镜1: 全景，张伟在街道上奔跑
+对话: 无
+分镜2: 特写，张伟停下脚步，气喘吁吁
+对话: "终于甩掉他们了"
+
+输出：
+Dynamic action sequence with Chinese dialogue. Wide shot of Zhang Wei running through urban street, footsteps echoing on pavement. Camera follows his movement with smooth tracking shot. Gradual transition to close-up as he slows down and stops, breathing heavily. He catches his breath and says "终于甩掉他们了" in Chinese with relief. Urban street sounds, heavy breathing, distant traffic noise. Natural lighting with slight motion blur during running sequence.
+
+示例3（情感场景）：
+输入：
+分镜1: 中景，小雨坐在窗边，望向窗外
+对话: 无
+分镜2: 特写，小雨的眼中泛起泪光
+对话: "我真的很想念你"
+
+输出：
+Emotional cinematic moment with Chinese dialogue. Medium shot of Xiao Yu sitting by the window, gazing outside with melancholic expression. Soft natural window light illuminating her face. Camera slowly pushes in for intimate close-up, revealing tears welling up in her eyes. She whispers "我真的很想念你" in Chinese with emotional trembling voice. Quiet ambient sound with distant rain drops, creating contemplative atmosphere. Gentle camera movement emphasizing emotional depth.
+
+现在请为上述两个分镜生成过渡视频提示词："""
 
     @classmethod
     def get_transition_video_prompt(cls, combined_text: str) -> str:

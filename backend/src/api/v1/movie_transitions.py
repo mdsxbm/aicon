@@ -20,16 +20,55 @@ async def get_transitions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_required)
 ):
-    """获取剧本的所有过渡视频记录"""
+    """获取剧本的所有过渡视频记录（包含分镜和场景信息）"""
     from sqlalchemy import select
-    from src.models.movie import MovieShotTransition
+    from sqlalchemy.orm import selectinload
+    from src.models.movie import MovieShotTransition, MovieShot, MovieScene
     
-    # 查询该剧本的所有过渡
-    stmt = select(MovieShotTransition).where(MovieShotTransition.script_id == script_id).order_by(MovieShotTransition.order_index)
+    # 查询该剧本的所有过渡，预加载关联的分镜和场景信息
+    stmt = (
+        select(MovieShotTransition)
+        .where(MovieShotTransition.script_id == script_id)
+        .options(
+            selectinload(MovieShotTransition.from_shot).selectinload(MovieShot.scene),
+            selectinload(MovieShotTransition.to_shot).selectinload(MovieShot.scene)
+        )
+        .order_by(MovieShotTransition.order_index)
+    )
     result = await db.execute(stmt)
     transitions = result.scalars().all()
     
-    return {"transitions": transitions}
+    # 格式化返回数据，包含分镜和场景信息
+    transition_list = []
+    for t in transitions:
+        transition_data = {
+            "id": str(t.id),
+            "script_id": str(t.script_id),
+            "from_shot_id": str(t.from_shot_id),
+            "to_shot_id": str(t.to_shot_id),
+            "order_index": t.order_index,
+            "video_prompt": t.video_prompt,
+            "video_url": t.video_url,
+            "video_task_id": t.video_task_id,
+            "status": t.status,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            # 添加分镜信息
+            "from_shot": {
+                "shot": t.from_shot.shot if t.from_shot else None,
+                "dialogue": t.from_shot.dialogue if t.from_shot else None,
+                "scene_name": t.from_shot.scene.scene if (t.from_shot and t.from_shot.scene) else None,
+                "scene_order": t.from_shot.scene.order_index if (t.from_shot and t.from_shot.scene) else None,
+            } if t.from_shot else None,
+            "to_shot": {
+                "shot": t.to_shot.shot if t.to_shot else None,
+                "dialogue": t.to_shot.dialogue if t.to_shot else None,
+                "scene_name": t.to_shot.scene.scene if (t.to_shot and t.to_shot.scene) else None,
+                "scene_order": t.to_shot.scene.order_index if (t.to_shot and t.to_shot.scene) else None,
+            } if t.to_shot else None,
+        }
+        transition_list.append(transition_data)
+    
+    return {"transitions": transition_list}
 
 @router.get("/transitions/{transition_id}", summary="获取单个过渡")
 async def get_transition(

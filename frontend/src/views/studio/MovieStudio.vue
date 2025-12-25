@@ -91,6 +91,7 @@
           <!-- 步骤5: 过渡视频 -->
           <TransitionPanel
             v-show="currentStep === 5"
+            :script-id="sceneWorkflow.script.value?.id"
             :transitions="transitionWorkflow.transitions.value"
             :creating="transitionWorkflow.creating.value"
             :generating="transitionWorkflow.generating.value"

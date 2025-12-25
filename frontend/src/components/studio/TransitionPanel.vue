@@ -72,16 +72,41 @@
           </div>
           
           <div class="transition-content">
-            <div class="shot-info">
-              <span class="label">起始镜头:</span>
-              <span class="value">{{ getShotDescription(transition.from_shot_id) }}</span>
+            <!-- 场景信息 -->
+            <div v-if="transition.from_shot && transition.to_shot" class="scene-info">
+              <el-tag size="small" type="info">
+                场景 {{ transition.from_shot.scene_order }} 
+                <template v-if="transition.from_shot.scene_order !== transition.to_shot.scene_order">
+                  → 场景 {{ transition.to_shot.scene_order }}
+                </template>
+              </el-tag>
             </div>
+
+            <!-- 起始分镜 -->
             <div class="shot-info">
-              <span class="label">结束镜头:</span>
-              <span class="value">{{ getShotDescription(transition.to_shot_id) }}</span>
+              <span class="label">起始分镜:</span>
+              <div class="shot-detail">
+                <p class="shot-description">{{ transition.from_shot?.shot || getShotDescription(transition.from_shot_id) }}</p>
+                <p v-if="transition.from_shot?.dialogue" class="shot-dialogue">
+                  💬 "{{ transition.from_shot.dialogue }}"
+                </p>
+              </div>
             </div>
+
+            <!-- 结束分镜 -->
+            <div class="shot-info">
+              <span class="label">结束分镜:</span>
+              <div class="shot-detail">
+                <p class="shot-description">{{ transition.to_shot?.shot || getShotDescription(transition.to_shot_id) }}</p>
+                <p v-if="transition.to_shot?.dialogue" class="shot-dialogue">
+                  💬 "{{ transition.to_shot.dialogue }}"
+                </p>
+              </div>
+            </div>
+
+            <!-- 提示词预览 -->
             <div class="prompt-preview">
-              <span class="label">提示词:</span>
+              <span class="label">视频提示词:</span>
               <p class="prompt-text">{{ transition.video_prompt || '未生成' }}</p>
             </div>
           </div>
@@ -602,15 +627,38 @@ const handleDelete = async (transition) => {
   margin-bottom: 12px;
 }
 
+.scene-info {
+  margin-bottom: 12px;
+}
+
 .shot-info {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   font-size: 13px;
 }
 
 .shot-info .label {
   font-weight: 600;
   color: #606266;
-  margin-right: 8px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.shot-detail {
+  padding-left: 12px;
+  border-left: 3px solid #e4e7ed;
+}
+
+.shot-description {
+  margin: 0 0 4px 0;
+  color: #606266;
+  line-height: 1.6;
+}
+
+.shot-dialogue {
+  margin: 0;
+  color: #909399;
+  font-style: italic;
+  font-size: 12px;
 }
 
 .shot-info .value {

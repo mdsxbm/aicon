@@ -171,7 +171,7 @@ class TransitionService(BaseService):
         script_id: str,
         api_key_id: str,
         model: str = None,
-        max_concurrent: int = 20
+        max_concurrent: int = 5
     ) -> Dict[str, Any]:
         """
         批量创建剧本所有分镜的过渡视频（并发处理）
