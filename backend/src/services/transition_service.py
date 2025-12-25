@@ -23,6 +23,61 @@ class TransitionService(BaseService):
     2. 调用视频API生成过渡视频
     """
 
+    async def _generate_transition_prompt(
+        self,
+        from_shot_description: str,
+        from_shot_dialogue: str,
+        to_shot_description: str,
+        to_shot_dialogue: str,
+        api_key,
+        model: str = None
+    ) -> str:
+        """
+        生成过渡视频提示词（内部方法，可复用）
+        
+        Args:
+            from_shot_description: 起始分镜描述
+            from_shot_dialogue: 起始分镜对话
+            to_shot_description: 结束分镜描述
+            to_shot_dialogue: 结束分镜对话
+            api_key: API Key对象
+            model: 模型名称
+            
+        Returns:
+            str: 生成的视频提示词
+        """
+        llm_provider = ProviderFactory.create(
+            provider=api_key.provider,
+            api_key=api_key.get_api_key(),
+            base_url=api_key.base_url
+        )
+
+        from src.services.movie_prompts import MoviePromptTemplates
+
+        combined_text = f"""分镜1:
+{from_shot_description}
+对话: {from_shot_dialogue}
+
+分镜2:
+{to_shot_description}
+对话: {to_shot_dialogue}
+"""
+
+        prompt = MoviePromptTemplates.get_transition_video_prompt(combined_text)
+
+        response = await llm_provider.completions(
+            model=model,
+            messages=[
+                {"role": "system", "content": "你是一个专业的电影视频提示词生成专家。"},
+                {"role": "user", "content": prompt},
+            ]
+        )
+
+        video_prompt = response.choices[0].message.content.strip()
+        logger.info(f"生成视频提示词: {video_prompt[:100]}...")
+        
+        return video_prompt
+
     async def generate_video_prompt(
         self,
         from_shot: MovieShot,
@@ -42,7 +97,7 @@ class TransitionService(BaseService):
         Returns:
             str: 生成的视频提示词（英文）
         """
-        # 1. 加载API Key
+        # 加载API Key
         from src.models.chapter import Chapter
         scene = await self.db_session.get(MovieScene, from_shot.scene_id, options=[
             selectinload(MovieScene.script)
@@ -54,41 +109,14 @@ class TransitionService(BaseService):
         api_key_service = APIKeyService(self.db_session)
         api_key = await api_key_service.get_api_key_by_id(api_key_id, str(chapter.project.owner_id))
         
-        llm_provider = ProviderFactory.create(
-            provider=api_key.provider,
-            api_key=api_key.get_api_key(),
-            base_url=api_key.base_url
+        return await self._generate_transition_prompt(
+            from_shot_description=from_shot.shot,
+            from_shot_dialogue=from_shot.dialogue or '无',
+            to_shot_description=to_shot.shot,
+            to_shot_dialogue=to_shot.dialogue or '无',
+            api_key=api_key,
+            model=model
         )
-
-        # 2. 使用统一的Prompt模板管理器
-        from src.services.movie_prompts import MoviePromptTemplates
-
-        # 3. 组合两个分镜的描述
-        combined_text = f"""分镜1:
-{from_shot.shot}
-对话: {from_shot.dialogue or '无'}
-
-分镜2:
-{to_shot.shot}
-对话: {to_shot.dialogue or '无'}
-"""
-
-        # 4. 使用模板管理器生成prompt
-        prompt = MoviePromptTemplates.get_transition_video_prompt(combined_text)
-
-        # 4. 调用LLM生成提示词
-        response = await llm_provider.completions(
-            model=model,
-            messages=[
-                {"role": "system", "content": "你是一个专业的电影视频提示词生成专家。"},
-                {"role": "user", "content": prompt},
-            ]
-        )
-
-        video_prompt = response.choices[0].message.content.strip()
-        logger.info(f"生成视频提示词: {video_prompt[:100]}...")
-        
-        return video_prompt
 
     async def create_transition(
         self,
@@ -142,15 +170,17 @@ class TransitionService(BaseService):
         self,
         script_id: str,
         api_key_id: str,
-        model: str = None
+        model: str = None,
+        max_concurrent: int = 20
     ) -> Dict[str, Any]:
         """
-        批量创建剧本所有分镜的过渡视频
+        批量创建剧本所有分镜的过渡视频（并发处理）
         
         Args:
             script_id: 剧本ID
             api_key_id: API Key ID
             model: 模型名称
+            max_concurrent: 最大并发数
             
         Returns:
             Dict: 统计信息
@@ -184,13 +214,27 @@ class TransitionService(BaseService):
         existing_pairs = {(str(t.from_shot_id), str(t.to_shot_id)) for t in existing_transitions}
         logger.info(f"已存在 {len(existing_transitions)} 个过渡")
 
-        # 4. 创建过渡（跳过已存在的）
-        created_transitions = []
+        # 4. 预加载API Key和项目信息（避免在协程中访问数据库）
+        from src.models.chapter import Chapter
+        scene = await self.db_session.get(MovieScene, all_shots[0].scene_id, options=[
+            selectinload(MovieScene.script)
+        ])
+        chapter = await self.db_session.get(Chapter, scene.script.chapter_id, options=[
+            selectinload(Chapter.project)
+        ])
+        
+        api_key_service = APIKeyService(self.db_session)
+        api_key = await api_key_service.get_api_key_by_id(api_key_id, str(chapter.project.owner_id))
+
+        # 5. 准备需要创建的过渡任务（提取所有需要的数据）
+        transition_tasks = []
         skipped_count = 0
         
         for i in range(len(all_shots) - 1):
-            from_shot_id = str(all_shots[i].id)
-            to_shot_id = str(all_shots[i + 1].id)
+            from_shot = all_shots[i]
+            to_shot = all_shots[i + 1]
+            from_shot_id = str(from_shot.id)
+            to_shot_id = str(to_shot.id)
             
             # 检查是否已存在
             if (from_shot_id, to_shot_id) in existing_pairs:
@@ -198,27 +242,88 @@ class TransitionService(BaseService):
                 skipped_count += 1
                 continue
             
-            try:
-                transition = await self.create_transition(
-                    script_id=script_id,
-                    from_shot_id=from_shot_id,
-                    to_shot_id=to_shot_id,
-                    order_index=i + 1,
-                    api_key_id=api_key_id,
-                    model=model
-                )
-                created_transitions.append(transition)
-                logger.info(f"创建过渡 {i+1}: {from_shot_id} -> {to_shot_id}")
-            except Exception as e:
-                logger.error(f"创建过渡 {i+1} 失败: {e}")
+            # 提取分镜数据（避免在协程中访问ORM对象）
+            transition_tasks.append({
+                'order_index': i + 1,
+                'from_shot_id': from_shot_id,
+                'to_shot_id': to_shot_id,
+                'from_shot_description': from_shot.shot,
+                'from_shot_dialogue': from_shot.dialogue or '无',
+                'to_shot_description': to_shot.shot,
+                'to_shot_dialogue': to_shot.dialogue or '无',
+            })
+
+        if not transition_tasks:
+            return {
+                "success": 0,
+                "failed": 0,
+                "skipped": skipped_count,
+                "total": len(all_shots) - 1,
+                "message": f"所有过渡已存在，跳过 {skipped_count} 个"
+            }
+
+        logger.info(f"准备并发创建 {len(transition_tasks)} 个过渡")
+
+        # 6. 并发worker函数
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        async def _create_transition_worker(task_data: Dict[str, Any]):
+            async with semaphore:
+                try:
+                    # 生成LLM提示词（使用提取的方法）
+                    video_prompt = await self._generate_transition_prompt(
+                        from_shot_description=task_data['from_shot_description'],
+                        from_shot_dialogue=task_data['from_shot_dialogue'],
+                        to_shot_description=task_data['to_shot_description'],
+                        to_shot_dialogue=task_data['to_shot_dialogue'],
+                        api_key=api_key,
+                        model=model
+                    )
+                    
+                    # 创建过渡对象（不立即提交）
+                    transition = MovieShotTransition(
+                        script_id=script_id,
+                        from_shot_id=task_data['from_shot_id'],
+                        to_shot_id=task_data['to_shot_id'],
+                        order_index=task_data['order_index'],
+                        video_prompt=video_prompt,
+                        status="pending"
+                    )
+                    
+                    logger.info(f"生成过渡提示词: {task_data['from_shot_id']} -> {task_data['to_shot_id']}")
+                    return {"success": True, "transition": transition}
+                    
+                except Exception as e:
+                    logger.error(f"创建过渡失败 {task_data['from_shot_id']} -> {task_data['to_shot_id']}: {e}")
+                    return {"success": False, "error": str(e)}
+
+        # 7. 并发执行
+        results = await asyncio.gather(*[_create_transition_worker(task) for task in transition_tasks])
+
+        # 8. 批量保存成功的过渡
+        success_count = 0
+        failed_count = 0
+        
+        for result in results:
+            if result.get("success") and result.get("transition"):
+                self.db_session.add(result["transition"])
+                success_count += 1
+            else:
+                failed_count += 1
+
+        # 9. 一次性提交
+        if success_count > 0:
+            await self.db_session.commit()
 
         total_possible = len(all_shots) - 1
+        logger.info(f"批量创建完成: 新建 {success_count}, 失败 {failed_count}, 跳过 {skipped_count}")
+        
         return {
-            "success": len(created_transitions),
-            "failed": total_possible - len(created_transitions) - skipped_count,
+            "success": success_count,
+            "failed": failed_count,
             "skipped": skipped_count,
             "total": total_possible,
-            "message": f"创建完成: 新建 {len(created_transitions)}, 跳过 {skipped_count}"
+            "message": f"创建完成: 新建 {success_count}, 跳过 {skipped_count}"
         }
 
     async def generate_transition_video(
