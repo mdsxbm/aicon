@@ -22,16 +22,16 @@ from src.api.schemas.movie import (
 logger = get_logger(__name__)
 router = APIRouter()
 
-@router.post("/scripts/{script_id}/extract-characters", summary="从剧本提取角色")
+@router.post("/chapters/{chapter_id}/extract-characters", summary="从章节提取角色")
 async def extract_characters(
-    script_id: str, 
+    chapter_id: str, 
     req: CharacterExtractRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_required)
 ):
-    """从剧本中提取角色（异步任务）"""
+    """从章节内容中提取角色（异步任务）"""
     from src.tasks.movie import movie_extract_characters
-    task = movie_extract_characters.delay(script_id, req.api_key_id, req.model)
+    task = movie_extract_characters.delay(chapter_id, req.api_key_id, req.model)
     return {"task_id": task.id, "message": "角色提取任务已提交"}
 
 @router.get("/projects/{project_id}/characters")

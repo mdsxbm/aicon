@@ -170,13 +170,12 @@ const handleStepChange = (step) => {
 }
 
 const handleExtractCharacters = async (apiKeyId, model) => {
-  // 需要script ID，但当前逻辑是从章节提取
-  // TODO: 修改后端API为 POST /movie/chapters/{chapterId}/extract-characters
-  if (!sceneWorkflow.script.value) {
-    ElMessage.warning('请先提取场景，才能提取角色')
+  // 角色提取直接使用chapter_id，不需要script
+  if (!selectedChapterId.value) {
+    ElMessage.warning('请先选择章节')
     return
   }
-  await characterWorkflow.extractCharacters(sceneWorkflow.script.value.id, apiKeyId, model)
+  await characterWorkflow.extractCharacters(selectedChapterId.value, apiKeyId, model)
   await loadData()
 }
 

@@ -69,13 +69,13 @@ async def movie_create_transitions(db_session: AsyncSession, self, script_id: st
     name="movie.extract_characters"
 )
 @async_task_decorator
-async def movie_extract_characters(db_session: AsyncSession, self, script_id: str, api_key_id: str, model: str = None):
-    """提取角色的 Celery 任务"""
+async def movie_extract_characters(db_session: AsyncSession, self, chapter_id: str, api_key_id: str, model: str = None):
+    """从章节提取角色的 Celery 任务"""
     from src.services.movie_character_service import MovieCharacterService
-    logger.info(f"Celery任务开始: movie_extract_characters (script_id={script_id})")
+    logger.info(f"Celery任务开始: movie_extract_characters (chapter_id={chapter_id})")
     
     service = MovieCharacterService(db_session)
-    chars = await service.extract_characters_from_script(script_id, api_key_id, model)
+    chars = await service.extract_characters_from_chapter(chapter_id, api_key_id, model)
     
     logger.info(f"Celery任务完成: movie_extract_characters, extracted {len(chars)} characters")
     return {"character_count": len(chars)}

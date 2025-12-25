@@ -23,10 +23,10 @@ export function useCharacterWorkflow(projectId) {
         }
     }
 
-    const extractCharacters = async (scriptId, apiKeyId, model) => {
+    const extractCharacters = async (chapterId, apiKeyId, model) => {
         extracting.value = true
         try {
-            const response = await movieService.extractCharacters(scriptId, {
+            const response = await movieService.extractCharacters(chapterId, {
                 api_key_id: apiKeyId,
                 model
             })

@@ -15,10 +15,10 @@ export const movieService = {
     },
 
     /**
-     * 从剧本中提取角色
+     * 从章节提取角色
      */
-    extractCharacters(scriptId, data) {
-        return post(`/movie/scripts/${scriptId}/extract-characters`, data)
+    extractCharacters(chapterId, data) {
+        return post(`/movie/chapters/${chapterId}/extract-characters`, data)
     },
 
     /**

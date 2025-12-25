@@ -165,31 +165,39 @@ class MovieCharacterService(BaseService):
 ---
 """
 
-    async def extract_characters_from_script(self, script_id: str, api_key_id: str, model: str = None) -> List[MovieCharacter]:
+    async def extract_characters_from_chapter(self, chapter_id: str, api_key_id: str, model: str = None) -> List[MovieCharacter]:
         """
-        从剧本中提取角色
+        从章节内容中提取角色
         """
-        # 1. 加载剧本内容
-        script = await self.db_session.get(MovieScript, script_id, options=[
-            selectinload(MovieScript.scenes).selectinload(MovieScene.shots)
-        ])
-        if not script:
-            raise ValueError("未找到剧本")
+        # 1. 加载章节内容
+        from src.models.chapter import Chapter
+        chapter = await self.db_session.get(Chapter, chapter_id, options=[selectinload(Chapter.project)])
+        if not chapter:
+            raise ValueError("未找到章节")
         
-        # 拼凑剧本全文用于分析
-        script_text = ""
-        for scene in script.scenes:
-            script_text += f"场景 {scene.order_index}: {scene.scene}\n"
-            if scene.characters:
-                script_text += f"出场角色: {', '.join(scene.characters)}\n"
-            for shot in scene.shots:
-                if shot.dialogue:
-                    script_text += f"镜头 {shot.order_index} 对话: {shot.dialogue}\n"
-            script_text += "\n"
+        # 使用章节内容作为分析文本
+        script_text = chapter.content or ""
+        
+        # 如果有剧本，也可以加载剧本内容作为补充
+        stmt = select(MovieScript).where(MovieScript.chapter_id == chapter_id).options(
+            selectinload(MovieScript.scenes).selectinload(MovieScene.shots)
+        )
+        result = await self.db_session.execute(stmt)
+        script = result.scalar_one_or_none()
+        
+        if script:
+            # 如果已经有剧本，拼凑剧本全文用于分析
+            for scene in script.scenes:
+                script_text += f"\n场景 {scene.order_index}: {scene.scene}\n"
+                if scene.characters:
+                    script_text += f"出场角色: {', '.join(scene.characters)}\n"
+                for shot in scene.shots:
+                    if shot.dialogue:
+                        script_text += f"镜头 {shot.order_index} 对话: {shot.dialogue}\n"
+                script_text += "\n"
 
         # 2. 加载 API Key
-        from src.models.chapter import Chapter
-        chapter = await self.db_session.get(Chapter, script.chapter_id, options=[selectinload(Chapter.project)])
+        chapter = await self.db_session.get(Chapter, chapter_id, options=[selectinload(Chapter.project)])
         api_key_service = APIKeyService(self.db_session)
         api_key = await api_key_service.get_api_key_by_id(api_key_id, str(chapter.project.owner_id))
         
@@ -317,6 +325,7 @@ class MovieCharacterService(BaseService):
         
         try:
             # 直接使用前端传递的提示词(用户已微调过的三视图提示词)
+            logger.info(f"收到的prompt参数: {prompt[:200] if prompt else 'None'}...")
             if not prompt:
                 raise ValueError("必须提供生成提示词")
             
@@ -324,7 +333,7 @@ class MovieCharacterService(BaseService):
             enhanced_prompt = f"{prompt}. IMPORTANT: Include the text '{char.name}' in the top-left corner of the image, clearly visible and readable."
             
             # 调用生图模型
-            logger.info(f"生成角色头像提示词: {enhanced_prompt}")
+            logger.info(f"生成角色头像提示词: {enhanced_prompt[:200]}...")
             result = await retry_with_backoff(
                 lambda: image_provider.generate_image(
                     prompt=enhanced_prompt,
