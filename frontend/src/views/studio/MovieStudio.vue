@@ -218,7 +218,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, VideoCamera } from '@element-plus/icons-vue'
@@ -432,17 +432,30 @@ const handleStartComposition = async () => {
       }
     )
     
-    // 跳转到 VideoTasks 页面，只传递 type 和 chapterId
-    router.push({
-      name: 'VideoTasks',
+    console.log('准备跳转到视频任务页面，参数:', {
+      action: 'create',
+      type: 'movie_composition',
+      chapterId: selectedChapterId.value
+    })
+    
+    // 跳转到视频任务页面（路由名称是 GenerationPage）
+    await router.push({
+      name: 'GenerationPage',
       query: {
         action: 'create',
         type: 'movie_composition',
         chapterId: selectedChapterId.value
       }
     })
+    
+    console.log('跳转成功')
+    ElMessage.success('正在跳转到视频任务页面...')
   } catch (e) {
-    // 用户取消
+    // 用户取消或跳转失败
+    if (e !== 'cancel') {
+      console.error('跳转失败:', e)
+      ElMessage.error('跳转失败: ' + (e.message || '未知错误'))
+    }
   }
 }
 

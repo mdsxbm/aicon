@@ -159,14 +159,6 @@
         >
           导演引擎
         </el-button>
-        <el-button
-          v-if="['completed', 'parsed'].includes(project.status)"
-          type="primary"
-          :icon="VideoPlay"
-          @click="handleStartGeneration"
-        >
-          开始视频生成
-        </el-button>
 
 
         <!-- 危险操作 -->
