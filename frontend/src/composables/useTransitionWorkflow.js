@@ -87,6 +87,7 @@ export function useTransitionWorkflow() {
         }
     }
 
+    // 生成单个过渡视频
     const generateSingleVideo = async (transitionId, scriptId, apiKeyId, videoModel, prompt) => {
         generatingIds.value.add(transitionId)
         try {
@@ -108,9 +109,11 @@ export function useTransitionWorkflow() {
                     generatingIds.value.delete(transitionId)
                 })
             }
+            return response
         } catch (error) {
             ElMessage.error('视频生成失败')
             generatingIds.value.delete(transitionId)
+            throw error
         }
     }
 

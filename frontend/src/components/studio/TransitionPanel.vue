@@ -121,8 +121,12 @@
             </div>
           </div>
 
-          <div v-if="transition.video_url" class="transition-video">
-            <video :src="transition.video_url" controls />
+          <div v-if="transition.video_url" class="transition-video" @click="handlePreviewVideo(transition.video_url)">
+            <video :src="transition.video_url" controls @click.stop />
+            <div class="video-overlay">
+              <el-icon :size="30"><ZoomIn /></el-icon>
+              <span>点击放大</span>
+            </div>
           </div>
           <div v-else-if="transition.status === 'processing'" class="transition-placeholder">
             <el-icon :size="40"><Loading /></el-icon>
@@ -310,13 +314,25 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 视频预览对话框 -->
+    <el-dialog
+      v-model="showVideoPreview"
+      title="视频预览"
+      width="80%"
+      :close-on-click-modal="true"
+    >
+      <div class="video-preview-container">
+        <video v-if="previewVideoUrl" :src="previewVideoUrl" controls autoplay style="width: 100%; max-height: 70vh;" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, VideoCamera, CircleClose, Refresh } from '@element-plus/icons-vue'
+import { Loading, VideoCamera, CircleClose, Refresh, ZoomIn } from '@element-plus/icons-vue'
 import { useTransitionWorkflow } from '@/composables/useTransitionWorkflow'
 import api from '@/services/api'
 
@@ -340,6 +356,10 @@ const {
 
 // 刷新状态
 const refreshingIds = ref(new Set())
+
+// 视频预览
+const showVideoPreview = ref(false)
+const previewVideoUrl = ref('')
 
 // 对话框状态
 const showCreateDialog = ref(false)
@@ -559,8 +579,10 @@ const handleSingleGenerateConfirm = async () => {
   try {
     await generateSingleVideo(
       singleGenerateFormData.value.transitionId,
+      props.scriptId,
       singleGenerateFormData.value.apiKeyId,
-      singleGenerateFormData.value.videoModel
+      singleGenerateFormData.value.videoModel,
+      singleGenerateFormData.value.prompt
     )
     ElMessage.success('视频生成任务已提交')
     await loadTransitions(props.scriptId)
@@ -599,6 +621,12 @@ const handleRefreshStatus = async (transition) => {
   } finally {
     refreshingIds.value.delete(transition.id)
   }
+}
+
+// 预览视频
+const handlePreviewVideo = (videoUrl) => {
+  previewVideoUrl.value = videoUrl
+  showVideoPreview.value = true
 }
 
 // 格式化错误信息
@@ -768,12 +796,49 @@ const handleDelete = async (transition) => {
 
 .transition-video {
   margin-top: 12px;
+  position: relative;
+  cursor: pointer;
+  
+  &:hover .video-overlay {
+    opacity: 1;
+  }
 }
 
 .transition-video video {
   width: 100%;
   border-radius: 4px;
   background: #000;
+}
+
+.video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: opacity 0.3s;
+  border-radius: 4px;
+  pointer-events: none;
+  
+  span {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+}
+
+.video-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #000;
+  border-radius: 8px;
 }
 
 .transition-placeholder {

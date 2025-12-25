@@ -39,8 +39,22 @@ async def get_transitions(
     transitions = result.scalars().all()
     
     # 格式化返回数据，包含分镜和场景信息
+    from datetime import timedelta
+    from src.utils.storage import get_storage_client
+    
+    storage_client = await get_storage_client()
+    
     transition_list = []
     for t in transitions:
+        # 转换video_url为presigned URL
+        video_url = None
+        if t.video_url:
+            try:
+                video_url = storage_client.get_presigned_url(t.video_url, expires=timedelta(hours=1))
+            except Exception as e:
+                logger.warning(f"获取视频URL失败: {e}")
+                video_url = t.video_url
+        
         transition_data = {
             "id": str(t.id),
             "script_id": str(t.script_id),
@@ -48,9 +62,10 @@ async def get_transitions(
             "to_shot_id": str(t.to_shot_id),
             "order_index": t.order_index,
             "video_prompt": t.video_prompt,
-            "video_url": t.video_url,
+            "video_url": video_url,
             "video_task_id": t.video_task_id,
             "status": t.status,
+            "error_message": t.error_message,
             "created_at": t.created_at.isoformat() if t.created_at else None,
             # 添加分镜信息
             "from_shot": {
