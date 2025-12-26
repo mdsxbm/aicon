@@ -447,29 +447,16 @@ Generate a detailed, cinematic establishing shot that captures the environment w
 4. **音频指令格式**（重要！）：
    - **禁止背景音乐**: 严格禁止任何背景音乐(BGM)、配乐、音乐主题、旋律、节奏音乐等
    - **只允许物理音效和环境音**: 仅包含真实的物理声音和环境声音
-   - 对话：如果是中文对话,使用 'Character says in Chinese "对话内容"' 格式(语言类型在对话内容前面);如果是英文对话,直接使用 'Character says "dialogue content"'
    - 物理音效：使用 'SFX:' 前缀，例如 'SFX: footsteps on wooden floor', 'SFX: door creaking open', 'SFX: thunder cracks in the distance', 'SFX: sword clashing', 'SFX: glass breaking', 'SFX: heavy breathing', 'SFX: rain drops on window'
    - 环境音：使用 'Ambient noise:' 前缀，例如 'Ambient noise: quiet hum of city traffic', 'Ambient noise: wind rustling through trees', 'Ambient noise: distant crowd murmur', 'Ambient noise: quiet room tone'
    - **音频约束**: NO background music, NO BGM, NO musical score, NO soundtrack, NO melody, NO rhythmic music
 
-5. **字幕规范**（如果有对话）：
-   - **位置**: Bottom center of frame, leaving space from bottom edge
-   - **字体**: Clean, bold sans-serif font (similar to Arial or Helvetica)
-   - **文字颜色**: White text with black outline/stroke for maximum visibility
-   - **背景**: Semi-transparent black bar behind text (opacity ~70%)
-   - **大小**: Medium size, easily readable without dominating the frame
-   - **对齐**: Center-aligned
-   - **时机**: Subtitles appear synchronized with dialogue delivery
-   - **语言**: Display Chinese characters exactly as provided in dialogue
-   - **格式**: Each line of dialogue should have its own subtitle
-   - **持续时间**: Subtitle remains visible for the duration of the spoken dialogue
-
-6. **风格与氛围**：
+5. **风格与氛围**：
    - 光线：natural light, golden hour, soft window light, dramatic shadows, volumetric light rays, harsh fluorescent
    - 情绪：melancholic, tense, joyful, mysterious, contemplative, energetic, serene
    - 美学：cinematic, moody, vibrant, noir, retro, contemporary
 
-7. **角色名称保护**：
+6. **角色名称保护**：
    - **角色名称必须与输入完全一致，不允许翻译、音译或修改**
    - 例如：输入是"李明"，输出也必须是"李明"，不能变成"Li Ming"
 
@@ -491,49 +478,41 @@ Generate a detailed, cinematic establishing shot that captures the environment w
 
 输入：
 分镜1: 特写，李明坐在办公桌前，表情严肃
-对话: "这个项目必须在周五前完成"
 角色: 李明
 分镜2: 中景，王芳站起身，面露难色
-对话: "时间太紧了，我需要更多人手"
 角色: 王芳
 
 输出：
-Smooth dolly shot transition with Chinese dialogue and subtitles. Close-up of 李明 at office desk with serious expression, he says in Chinese "这个项目必须在周五前完成" with firm tone. Subtitle appears at bottom center: white bold text "这个项目必须在周五前完成" with black outline on semi-transparent black bar. Camera slowly pulls back and pans right, revealing the modern office interior with soft overhead fluorescent lighting. 王芳 comes into frame in medium shot, standing up from her chair with worried expression, she responds in Chinese "时间太紧了，我需要更多人手". Subtitle updates: white bold text "时间太紧了，我需要更多人手" with black outline on semi-transparent black bar. Ambient noise: quiet office atmosphere with subtle keyboard typing, distant phone ringing. Cinematic color grading with cool blue tones. Professional cinematography creating seamless narrative flow.
+Smooth dolly shot transition. Close-up of 李明 at office desk with serious expression and focused gaze. Camera slowly pulls back and pans right, revealing the modern office interior with soft overhead fluorescent lighting. 王芳 comes into frame in medium shot, standing up from her chair with worried expression. Ambient noise: quiet office atmosphere with subtle keyboard typing, distant phone ringing. Cinematic color grading with cool blue tones. Professional cinematography creating seamless narrative flow.
 
 ### 示例2：动作场景 - 跟踪镜头
 
 输入：
 分镜1: 全景，张伟在街道上奔跑
-对话: 无
 角色: 张伟
 分镜2: 特写，张伟停下脚步，气喘吁吁
-对话: "终于甩掉他们了"
 角色: 张伟
 
 输出：
-Dynamic tracking shot with Chinese dialogue and subtitles. Wide shot of 张伟 sprinting through urban street at dusk, his footsteps echoing on wet pavement. Camera follows with smooth tracking movement, maintaining consistent framing. Gradual push in to close-up as he slows down and stops, breathing heavily with relief. He catches his breath and says in Chinese "终于甩掉他们了" with exhausted voice. Subtitle appears at bottom center: white bold text "终于甩掉他们了" with black outline on semi-transparent black bar. SFX: heavy breathing, footsteps on pavement, distant car horn. Ambient noise: city traffic in background. Natural lighting with slight motion blur during running. Moody cinematic aesthetic with desaturated colors.
+Dynamic tracking shot. Wide shot of 张伟 sprinting through urban street at dusk, his footsteps echoing on wet pavement. Camera follows with smooth tracking movement, maintaining consistent framing. Gradual push in to close-up as he slows down and stops, breathing heavily with relief. SFX: heavy breathing, footsteps on pavement, distant car horn. Ambient noise: city traffic in background. Natural lighting with slight motion blur during running. Moody cinematic aesthetic with desaturated colors.
 
 ### 示例3：情感场景 - 缓慢推进
 
 输入：
 分镜1: 中景，小雨坐在窗边，望向窗外
-对话: 无
 角色: 小雨
 分镜2: 特写，小雨的眼中泛起泪光
-对话: "我真的很想念你"
 角色: 小雨
 
 输出：
-Intimate slow push in with Chinese dialogue and subtitles. Medium shot of 小雨 sitting by rain-streaked window, gazing outside with melancholic expression. Soft natural window light illuminating her face with gentle shadows. Camera slowly pushes in for emotional close-up, revealing tears welling up in her eyes. She whispers in Chinese "我真的很想念你" with trembling, emotional voice. Subtitle appears at bottom center: white bold text "我真的很想念你" with black outline on semi-transparent black bar. SFX: gentle rain drops on window glass. Ambient noise: distant thunder, quiet room tone. Shallow depth of field with soft bokeh in background. Contemplative mood with warm, muted color palette. Cinematic film photography aesthetic.
+Intimate slow push in. Medium shot of 小雨 sitting by rain-streaked window, gazing outside with melancholic expression. Soft natural window light illuminating her face with gentle shadows. Camera slowly pushes in for emotional close-up, revealing tears welling up in her eyes with trembling emotion. SFX: gentle rain drops on window glass. Ambient noise: distant thunder, quiet room tone. Shallow depth of field with soft bokeh in background. Contemplative mood with warm, muted color palette. Cinematic film photography aesthetic.
 
 ### 示例4：环境过渡 - 摇臂镜头
 
 输入：
 分镜1: 全景，城堡外的荒野，暴风雨
-对话: 无
 角色: 无
 分镜2: 中景，城堡大厅内，壁炉火光
-对话: 无
 角色: 无
 
 输出：
