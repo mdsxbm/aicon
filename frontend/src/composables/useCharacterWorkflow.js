@@ -11,6 +11,7 @@ export function useCharacterWorkflow(projectId) {
     const characters = ref([])
     const extracting = ref(false)
     const generatingIds = ref(new Set()) // 改用Set跟踪多个正在生成的角色
+    const batchGenerating = ref(false) // 跟踪批量生成状态
 
     const loadCharacters = async () => {
         if (!projectId.value) return
@@ -78,6 +79,7 @@ export function useCharacterWorkflow(projectId) {
     }
 
     const batchGenerateAvatars = async (apiKeyId, model) => {
+        batchGenerating.value = true // 设置加载状态
         try {
             const response = await movieService.batchGenerateAvatars(projectId.value, {
                 api_key_id: apiKeyId,
@@ -90,12 +92,17 @@ export function useCharacterWorkflow(projectId) {
                 startPolling(response.task_id, async (result) => {
                     ElMessage.success(`批量生成完成: 成功 ${result.success}, 失败 ${result.failed}`)
                     await loadCharacters()
+                    batchGenerating.value = false // 完成后重置状态
                 }, (error) => {
                     ElMessage.error(`批量生成失败: ${error.message}`)
+                    batchGenerating.value = false // 失败后重置状态
                 })
+            } else {
+                batchGenerating.value = false // 没有task_id时重置状态
             }
         } catch (error) {
             ElMessage.error('无法启动批量生成')
+            batchGenerating.value = false // 异常时重置状态
         }
     }
 
@@ -113,6 +120,7 @@ export function useCharacterWorkflow(projectId) {
         characters,
         extracting,
         generatingIds, // 返回Set而不是单个ID
+        batchGenerating, // 批量生成加载状态
         loadCharacters,
         extractCharacters,
         generateAvatar,

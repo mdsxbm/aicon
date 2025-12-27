@@ -39,6 +39,7 @@
             :characters="characterWorkflow.characters.value"
             :extracting="characterWorkflow.extracting.value"
             :generating-ids="characterWorkflow.generatingIds.value"
+            :batch-generating="characterWorkflow.batchGenerating.value"
             :can-extract="canExtractCharacters"
             :api-keys="apiKeys"
             @extract-characters="handleExtractCharacters"
@@ -295,6 +296,11 @@ const chapterSelectorRef = ref(null)
 // Material check states
 const checkingMaterials = ref(false)
 const materialCheckResult = ref(null)
+
+// Computed properties
+const canExtractCharacters = computed(() => {
+  return !!selectedChapterId.value
+})
 
 // Event handlers
 const handleStepChange = (step) => {

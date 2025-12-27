@@ -13,7 +13,8 @@
         </el-button>
         <el-button 
           type="success"
-          :disabled="characters.length === 0"
+          :loading="batchGenerating"
+          :disabled="characters.length === 0 || batchGenerating"
           @click="handleBatchGenerateClick"
         >
           批量生成形象
@@ -165,6 +166,10 @@ const props = defineProps({
   generatingIds: {
     type: Set,
     default: () => new Set()
+  },
+  batchGenerating: {
+    type: Boolean,
+    default: false
   },
   canExtract: {
     type: Boolean,
