@@ -185,14 +185,17 @@ class MovieVideoService(BaseService):
         
         logger.info(f"🎬 开始拼接 {len(video_paths)} 个分镜视频")
         
-        # 使用优化的拼接方法,去除重复帧
-        # trim_frames=35: 每个后续视频裁剪开头35帧,避免过渡视频的重复
+        # 使用crossfade模式,提供专业级的视频过渡效果
+        # mode="crossfade": 使用交叉淡化过渡,视觉效果最自然
+        # transition_type="fade": 淡入淡出效果,适合大多数场景
+        # transition_duration=0.5: 0.5秒过渡时长,平衡流畅度和处理速度
         success = concatenate_videos(
             video_paths,
             final_video_path,
             concat_file_path,
-            remove_duplicate_frames=True,
-            trim_frames=35
+            mode="crossfade",
+            transition_type="fade",
+            transition_duration=0.5
         )
         
         if not success:

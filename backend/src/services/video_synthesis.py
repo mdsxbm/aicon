@@ -489,7 +489,15 @@ class VideoSynthesisService(BaseService):
             final_video_path = temp_dir / "final_video.mp4"
             concat_file_path = temp_dir / "concat.txt"
 
-            success = concatenate_videos(video_paths, final_video_path, concat_file_path)
+            # 使用crossfade模式提供专业级的视频过渡效果
+            success = concatenate_videos(
+                video_paths, 
+                final_video_path, 
+                concat_file_path,
+                mode="crossfade",
+                transition_type="fade",
+                transition_duration=0.5
+            )
             if not success:
                 raise BusinessLogicError("视频拼接失败")
 

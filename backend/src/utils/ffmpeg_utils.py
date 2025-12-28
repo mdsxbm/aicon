@@ -394,14 +394,11 @@ def _concatenate_with_xfade(
             durations.append(duration)
             logger.debug(f"视频 {video_path.name}: {duration:.2f}秒")
         
-        # 构建xfade滤镜链
-        # 对于N个视频,需要N-1个xfade滤镜
+        # 构建xfade滤镜链 (仅处理视频)
         video_filter_parts = []
-        audio_filter_parts = []
         
         # 第一个视频作为基础
         current_video_label = "[0:v]"
-        current_audio_label = "[0:a]"
         offset = 0.0
         
         for i in range(1, len(video_paths)):
@@ -419,21 +416,35 @@ def _concatenate_with_xfade(
             )
             video_filter_parts.append(xfade_filter)
             current_video_label = output_video_label
-            
-            # 构建音频混合滤镜
-            # 使用acrossfade实现音频的平滑过渡
-            output_audio_label = f"[a{i}out]" if i < len(video_paths) - 1 else "[aout]"
-            acrossfade_filter = (
-                f"{current_audio_label}[{i}:a]"
-                f"acrossfade=d={transition_duration}:"
-                f"c1=tri:c2=tri"  # 使用三角形曲线,更自然
-                f"{output_audio_label}"
-            )
-            audio_filter_parts.append(acrossfade_filter)
-            current_audio_label = output_audio_label
+        
+        # 音频处理: 使用简单的concat滤镜
+        # 为每个音频流添加延迟以匹配视频过渡
+        audio_filter_parts = []
+        
+        for i in range(len(video_paths)):
+            if i == 0:
+                # 第一个音频: 裁剪结尾的过渡时长
+                trim_end = durations[i] - transition_duration if i < len(video_paths) - 1 else durations[i]
+                audio_filter_parts.append(f"[{i}:a]atrim=0:{trim_end},asetpts=PTS-STARTPTS[a{i}]")
+            elif i == len(video_paths) - 1:
+                # 最后一个音频: 跳过开头的过渡时长
+                audio_filter_parts.append(f"[{i}:a]atrim={transition_duration},asetpts=PTS-STARTPTS[a{i}]")
+            else:
+                # 中间的音频: 跳过开头和裁剪结尾
+                trim_end = durations[i] - transition_duration
+                audio_filter_parts.append(
+                    f"[{i}:a]atrim={transition_duration}:{trim_end},asetpts=PTS-STARTPTS[a{i}]"
+                )
+        
+        # 拼接所有音频
+        audio_inputs = ''.join([f"[a{i}]" for i in range(len(video_paths))])
+        audio_concat = f"{audio_inputs}concat=n={len(video_paths)}:v=0:a=1[aout]"
+        audio_filter_parts.append(audio_concat)
         
         # 组合视频和音频滤镜
         filter_complex = ";".join(video_filter_parts + audio_filter_parts)
+        
+        logger.debug(f"Filter complex: {filter_complex}")
         
         # 构建FFmpeg命令
         command = ["ffmpeg", "-y"]
@@ -450,8 +461,10 @@ def _concatenate_with_xfade(
             "-c:v", "libx264",
             "-preset", "medium",
             "-crf", "18",  # 高质量
+            "-pix_fmt", "yuv420p",  # 确保兼容性
             "-c:a", "aac",
             "-b:a", "192k",
+            "-ar", "44100",  # 音频采样率
             "-movflags", "+faststart",
             str(output_path)
         ])
