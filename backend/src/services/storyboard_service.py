@@ -113,6 +113,46 @@ class StoryboardService(BaseService):
         await self.db_session.commit()
         return created_shots
 
+    async def extract_shots_from_single_scene_with_deletion(
+        self,
+        scene_id: str,
+        api_key_id: str,
+        model: str = None
+    ) -> List[MovieShot]:
+        """
+        从单个场景重新提取分镜（先删除现有分镜）
+        
+        Args:
+            scene_id: 场景ID
+            api_key_id: API Key ID
+            model: 模型名称
+            
+        Returns:
+            List[MovieShot]: 生成的分镜列表
+        """
+        # 1. 加载场景及其现有分镜
+        scene = await self.db_session.get(MovieScene, scene_id, options=[
+            selectinload(MovieScene.script),
+            selectinload(MovieScene.shots)
+        ])
+        if not scene:
+            raise ValueError(f"未找到场景: {scene_id}")
+
+        # 2. 删除该场景的所有现有分镜（会级联删除关键帧）
+        if scene.shots:
+            logger.info(f"场景 {scene_id} 有 {len(scene.shots)} 个现有分镜，将全部删除")
+            for shot in scene.shots:
+                await self.db_session.delete(shot)
+            await self.db_session.flush()
+            logger.info(f"场景 {scene_id} 的现有分镜已删除")
+
+        # 3. 调用现有的提取方法生成新分镜
+        created_shots = await self.extract_shots_from_scene(scene_id, api_key_id, model)
+        
+        logger.info(f"场景 {scene_id} 重新提取完成，生成 {len(created_shots)} 个分镜")
+        return created_shots
+
+
     async def batch_extract_shots_from_script(
         self,
         script_id: str,

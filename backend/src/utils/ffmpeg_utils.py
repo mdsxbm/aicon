@@ -288,19 +288,38 @@ def concatenate_videos(
     video_paths: List[Path], 
     output_path: Path, 
     concat_file_path: Path,
-    remove_duplicate_frames: bool = True,
+    # 新参数: 拼接模式
+    mode: str = "crossfade",
+    # crossfade模式参数
+    transition_type: str = "fade",
+    transition_duration: float = 0.5,
+    # trim模式参数(保留向后兼容)
+    remove_duplicate_frames: bool = False,
     trim_frames: int = 35
 ) -> bool:
     """
-    拼接多个视频文件,可选去除相邻视频间的重复帧
-
+    拼接多个视频文件,支持多种拼接模式
+    
     Args:
         video_paths: 视频文件路径列表
         output_path: 输出视频路径
         concat_file_path: concat文件路径(用于fallback)
-        remove_duplicate_frames: 是否去除相邻视频间的重复帧(默认True)
-        trim_frames: 每个后续视频裁剪开头的帧数(默认35帧,约1.5秒@24fps)
-
+        mode: 拼接模式, 可选:
+            - "crossfade": 使用交叉淡化过渡(推荐,最自然)
+            - "trim": 裁剪重复帧
+            - "fast": 快速拼接(不处理重复帧)
+        transition_type: 过渡效果类型(仅crossfade模式), 可选:
+            - "fade": 淡入淡出(默认,最自然)
+            - "dissolve": 溶解
+            - "wipeleft", "wiperight": 左右擦除
+            - "slideleft", "slideright": 左右滑动
+            - "circleopen", "circleclose": 圆形开合
+            - "fadeblack", "fadewhite": 黑/白场过渡
+            等30+种效果
+        transition_duration: 过渡时长(秒), 默认0.5秒
+        remove_duplicate_frames: 是否去除重复帧(trim模式,已废弃)
+        trim_frames: 裁剪帧数(trim模式,已废弃)
+    
     Returns:
         是否成功
     """
@@ -316,12 +335,162 @@ def concatenate_videos(
             logger.info(f"只有一个视频,直接复制: {output_path}")
             return True
         
-        # 如果不需要去除重复帧,使用原有的快速方法
-        if not remove_duplicate_frames:
+        # 根据模式选择拼接方法
+        if mode == "crossfade":
+            return _concatenate_with_xfade(
+                video_paths, output_path, 
+                transition_type, transition_duration
+            )
+        elif mode == "trim" or remove_duplicate_frames:
+            return _concatenate_with_trim(
+                video_paths, output_path, 
+                concat_file_path, trim_frames
+            )
+        else:  # mode == "fast"
+            return _concatenate_videos_fast(
+                video_paths, output_path, concat_file_path
+            )
+    
+    except Exception as e:
+        logger.error(f"视频拼接异常: {e}", exc_info=True)
+        # Fallback到快速方法
+        try:
+            logger.warning("尝试使用快速方法(不去除重复帧)...")
             return _concatenate_videos_fast(video_paths, output_path, concat_file_path)
+        except Exception as fallback_error:
+            logger.error(f"快速方法也失败: {fallback_error}")
+            return False
+
+
+def _concatenate_with_xfade(
+    video_paths: List[Path],
+    output_path: Path,
+    transition_type: str = "fade",
+    transition_duration: float = 0.5
+) -> bool:
+    """
+    使用交叉淡化效果拼接视频(推荐方法)
+    
+    Args:
+        video_paths: 视频文件路径列表
+        output_path: 输出视频路径
+        transition_type: 过渡效果类型
+        transition_duration: 过渡时长(秒)
+    
+    Returns:
+        是否成功
+    """
+    try:
+        logger.info(f"开始拼接 {len(video_paths)} 个视频(crossfade模式)")
+        logger.info(f"过渡效果: {transition_type}, 过渡时长: {transition_duration}秒")
         
-        # 使用滤镜去除重复帧
-        logger.info(f"开始拼接 {len(video_paths)} 个视频(去除重复帧,裁剪开头{trim_frames}帧)")
+        # 获取每个视频的时长
+        durations = []
+        for video_path in video_paths:
+            duration = get_audio_duration(str(video_path))
+            if not duration:
+                logger.error(f"无法获取视频时长: {video_path}")
+                return False
+            durations.append(duration)
+            logger.debug(f"视频 {video_path.name}: {duration:.2f}秒")
+        
+        # 构建xfade滤镜链
+        # 对于N个视频,需要N-1个xfade滤镜
+        video_filter_parts = []
+        audio_filter_parts = []
+        
+        # 第一个视频作为基础
+        current_video_label = "[0:v]"
+        current_audio_label = "[0:a]"
+        offset = 0.0
+        
+        for i in range(1, len(video_paths)):
+            # 计算offset: 前一个视频的累计时长 - 过渡时长
+            offset += durations[i-1] - transition_duration
+            
+            # 构建xfade视频滤镜
+            output_video_label = f"[v{i}out]" if i < len(video_paths) - 1 else "[vout]"
+            xfade_filter = (
+                f"{current_video_label}[{i}:v]"
+                f"xfade=transition={transition_type}:"
+                f"duration={transition_duration}:"
+                f"offset={offset:.3f}"
+                f"{output_video_label}"
+            )
+            video_filter_parts.append(xfade_filter)
+            current_video_label = output_video_label
+            
+            # 构建音频混合滤镜
+            # 使用acrossfade实现音频的平滑过渡
+            output_audio_label = f"[a{i}out]" if i < len(video_paths) - 1 else "[aout]"
+            acrossfade_filter = (
+                f"{current_audio_label}[{i}:a]"
+                f"acrossfade=d={transition_duration}:"
+                f"c1=tri:c2=tri"  # 使用三角形曲线,更自然
+                f"{output_audio_label}"
+            )
+            audio_filter_parts.append(acrossfade_filter)
+            current_audio_label = output_audio_label
+        
+        # 组合视频和音频滤镜
+        filter_complex = ";".join(video_filter_parts + audio_filter_parts)
+        
+        # 构建FFmpeg命令
+        command = ["ffmpeg", "-y"]
+        
+        # 添加所有输入文件
+        for video_path in video_paths:
+            command.extend(["-i", str(video_path)])
+        
+        # 添加滤镜和输出参数
+        command.extend([
+            "-filter_complex", filter_complex,
+            "-map", "[vout]",
+            "-map", "[aout]",
+            "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", "18",  # 高质量
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-movflags", "+faststart",
+            str(output_path)
+        ])
+        
+        # 执行命令
+        success, stdout, stderr = run_ffmpeg_command(command, timeout=600)
+        
+        if success:
+            logger.info(f"✅ 视频拼接成功(crossfade模式): {output_path}")
+            return True
+        else:
+            logger.error(f"❌ 视频拼接失败: {stderr}")
+            return False
+    
+    except Exception as e:
+        logger.error(f"Crossfade拼接异常: {e}", exc_info=True)
+        return False
+
+
+def _concatenate_with_trim(
+    video_paths: List[Path],
+    output_path: Path,
+    concat_file_path: Path,
+    trim_frames: int = 35
+) -> bool:
+    """
+    使用帧裁剪方式拼接视频(旧方法,保留兼容性)
+    
+    Args:
+        video_paths: 视频文件路径列表
+        output_path: 输出视频路径
+        concat_file_path: concat文件路径
+        trim_frames: 裁剪帧数
+    
+    Returns:
+        是否成功
+    """
+    try:
+        logger.info(f"开始拼接 {len(video_paths)} 个视频(trim模式,裁剪开头{trim_frames}帧)")
         
         # 获取第一个视频的帧率
         fps = get_video_fps(str(video_paths[0]))
@@ -334,9 +503,6 @@ def concatenate_videos(
         logger.info(f"视频帧率: {fps:.2f}fps, 每帧时长: {frame_duration:.4f}秒, 裁剪{trim_frames}帧={trim_frames*frame_duration:.4f}秒")
         
         # 构建filter_complex
-        # 简化策略: 只裁剪后续视频的开头
-        # - 第一个视频: 保持完整
-        # - 后续视频: 去掉前N帧
         video_filters = []
         audio_filters = []
         
@@ -347,7 +513,6 @@ def concatenate_videos(
                 audio_filters.append(f"[{idx}:a]anull[a{idx}]")
             else:
                 # 后续视频去掉前N帧
-                # 获取视频总帧数用于验证
                 duration = get_audio_duration(str(video_path))
                 if duration:
                     total_frames = int(duration * fps)
@@ -374,10 +539,7 @@ def concatenate_videos(
         filter_complex = ';'.join(video_filters + audio_filters + [video_concat, audio_concat])
         
         # 构建FFmpeg命令
-        command = [
-            "ffmpeg",
-            "-y"
-        ]
+        command = ["ffmpeg", "-y"]
         
         # 添加所有输入文件
         for video_path in video_paths:
@@ -390,7 +552,7 @@ def concatenate_videos(
             "-map", "[outa]",
             "-c:v", "libx264",
             "-preset", "medium",
-            "-crf", "18",  # 高质量
+            "-crf", "18",
             "-c:a", "aac",
             "-b:a", "192k",
             "-movflags", "+faststart",
@@ -401,23 +563,17 @@ def concatenate_videos(
         success, stdout, stderr = run_ffmpeg_command(command, timeout=600)
         
         if success:
-            logger.info(f"✅ 视频拼接成功(已去除重复帧): {output_path}")
+            logger.info(f"✅ 视频拼接成功(trim模式): {output_path}")
             return True
         else:
             logger.error(f"❌ 视频拼接失败: {stderr}")
             # Fallback到快速方法
-            logger.warning("尝试使用快速方法(不去除重复帧)...")
+            logger.warning("尝试使用快速方法...")
             return _concatenate_videos_fast(video_paths, output_path, concat_file_path)
-
+    
     except Exception as e:
-        logger.error(f"视频拼接异常: {e}", exc_info=True)
-        # Fallback到快速方法
-        try:
-            logger.warning("尝试使用快速方法(不去除重复帧)...")
-            return _concatenate_videos_fast(video_paths, output_path, concat_file_path)
-        except Exception as fallback_error:
-            logger.error(f"快速方法也失败: {fallback_error}")
-            return False
+        logger.error(f"Trim拼接异常: {e}", exc_info=True)
+        return False
 
 
 def _concatenate_videos_fast(video_paths: List[Path], output_path: Path, concat_file_path: Path) -> bool:

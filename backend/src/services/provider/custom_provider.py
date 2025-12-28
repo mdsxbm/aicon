@@ -154,7 +154,7 @@ class CustomProvider(BaseLLMProvider):
         except (KeyError, IndexError) as e:
             raise ValueError(f"无法从 Gemini 响应中提取图像数据: {e}")
 
-    async def generate_image_gemini(self, prompt: str,aspectRatio: str="16:9",imageSize: str="2K", **kwargs: Any):
+    async def generate_image_gemini(self, prompt: str,aspectRatio: str="16:9",imageSize: str="1K", **kwargs: Any):
         """
         Gemini 生成图像（携程异步版本）
         支持 reference_images 参数 (Persona)

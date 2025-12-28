@@ -63,9 +63,11 @@
             v-show="currentStep === 2"
             :scene-groups="shotWorkflow.sceneGroups.value"
             :extracting="shotWorkflow.extracting.value"
+            :extracting-scenes="shotWorkflow.extractingScenes.value"
             :can-extract="canExtractShots"
             :api-keys="apiKeys"
             @extract-shots="handleExtractShots"
+            @extract-single-scene-shots="handleExtractSingleSceneShots"
           />
 
           <!-- 步骤3: 场景图生成 -->
@@ -346,6 +348,11 @@ const handleExtractShots = async (apiKeyId, model) => {
   }
   await shotWorkflow.extractShots(sceneWorkflow.script.value.id, apiKeyId, model, sceneWorkflow.loadScript)
 }
+
+const handleExtractSingleSceneShots = async (sceneId, apiKeyId, model) => {
+  await shotWorkflow.extractSingleSceneShots(sceneId, apiKeyId, model, sceneWorkflow.loadScript)
+}
+
 
 const handleBatchGenerateKeyframes = async (apiKeyId, model) => {
   if (!sceneWorkflow.script.value?.id) {

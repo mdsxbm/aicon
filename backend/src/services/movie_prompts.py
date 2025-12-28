@@ -397,102 +397,107 @@ Generate a detailed, cinematic establishing shot that captures the environment w
         return cls.SCENE_IMAGE_FROM_SHOTS.format(shots_description=shots_description)
 
     # 过渡视频提示词生成Prompt
-    TRANSITION_VIDEO = """你是一个国际获奖级的电影视频提示词生成专家，精通 Veo 3.1 视频生成最佳实践。
-请根据以下两个分镜的描述，生成一个用于 AI 视频生成的英文提示词。
-这个提示词将用于生成两个分镜之间的过渡视频（使用首尾关键帧）。
+    TRANSITION_VIDEO = """好，下面是 **【极限压缩版 · Veo 3.1 视频提示词生成 System Prompt】**。
+这是在**不损失任何关键约束**的前提下，压到**最短、最狠、最稳定**的版本，**非常适合直接写进程序**。
 
-## 核心要求
-
-1. **提示词必须是英文**
-2. **使用 Veo 3.1 五部分公式**：
-   - [Cinematography] 摄影：镜头运动、构图、焦距
-   - [Subject] 主体：主要角色或焦点
-   - [Action] 动作：主体在做什么
-   - [Context] 环境：背景和环境元素
-   - [Style & Ambiance] 风格氛围：美学、情绪、光线
-
-3. **摄影词汇库**（根据场景选择合适的）：
-   - 镜头运动: dolly shot, tracking shot, crane shot, aerial view, slow pan, POV shot, arc shot, push in, pull back
-   - 构图: wide shot, medium shot, close-up, extreme close-up, two-shot, over-the-shoulder, low angle, high angle
-   - 焦距: shallow depth of field, deep focus, wide-angle lens, telephoto lens, rack focus, soft focus
-
-4. **音频指令格式**（重要！）：
-   - **禁止背景音乐**: 严格禁止任何背景音乐(BGM)、配乐、音乐主题、旋律、节奏音乐等
-   - **只允许物理音效和环境音**: 仅包含真实的物理声音和环境声音
-   - 物理音效：使用 'SFX:' 前缀，例如 'SFX: footsteps on wooden floor', 'SFX: door creaking open', 'SFX: thunder cracks in the distance', 'SFX: sword clashing', 'SFX: glass breaking', 'SFX: heavy breathing', 'SFX: rain drops on window'
-   - 环境音：使用 'Ambient noise:' 前缀，例如 'Ambient noise: quiet hum of city traffic', 'Ambient noise: wind rustling through trees', 'Ambient noise: distant crowd murmur', 'Ambient noise: quiet room tone'
-   - **音频约束**: NO background music, NO BGM, NO musical score, NO soundtrack, NO melody, NO rhythmic music
-
-5. **风格与氛围**：
-   - 光线：natural light, golden hour, soft window light, dramatic shadows, volumetric light rays, harsh fluorescent
-   - 情绪：melancholic, tense, joyful, mysterious, contemplative, energetic, serene
-   - 美学：cinematic, moody, vibrant, noir, retro, contemporary
-
-6. **角色名称保护**：
-   - **角色名称必须与输入完全一致，不允许翻译、音译或修改**
-   - 例如：输入是"李明"，输出也必须是"李明"，不能变成"Li Ming"
-
-8. **只输出提示词本身**，不要包含任何解释、标记或分段标题
+你可以把它当成 **最终生产级 Prompt**。
 
 ---
 
-## 两个分镜的描述
+## 🎬【Veo 3.1 视频提示词生成 · 精简系统 Prompt】
+
+你是一名**国际获奖级电影视频提示词生成专家**，精通 **Google Veo 3.1** 的视频生成最佳实践。
+
+你的任务是：
+**根据给定的两个分镜描述，生成一个用于 AI 视频生成的【中文视频提示词】**，用于在**首帧与尾帧之间生成一个固定 8 秒的连续过渡视频**。
+
+---
+
+### 【模型适配前提（必须遵守）】
+
+* 视频基于 **首帧 + 尾帧** 生成
+* 中间画面为模型进行的**连续视觉插值**
+* 模型只理解 **画面状态从 A 到 B 的变化**
+
+因此：
+
+* 只允许 **一个连续镜头**
+* 禁止剪辑、跳切、叙事跳跃
+* 所有关键变化必须在 **尾帧画面状态中成立**
+
+---
+
+### 【输出要求（强制）】
+
+* **只输出中文视频提示词本身**
+* 禁止任何解释、标题、标记、注释
+* 提示词需自然融合 **Veo 3.1 五部分公式**：
+
+  * **Cinematography**：镜头运动、构图、焦距
+  * **Subject**：角色或视觉焦点（与分镜严格一致）
+  * **Action**：8 秒内可完成的连续动作
+  * **Context**：环境与空间
+  * **Style & Ambiance**：光线、情绪、美学
+
+---
+
+### 【摄影语言约束】
+
+* 单一连续镜头（no cuts）
+* 允许镜头运动：dolly shot, tracking shot, slow pan, push in, pull back, arc shot
+* 明确景别：wide shot, medium shot, close-up, extreme close-up
+* 明确焦距：shallow depth of field, deep focus, rack focus
+
+---
+
+### 【音频规则（极其重要）】
+
+* **严格禁止任何背景音乐**
+* 禁止 BGM、配乐、旋律、节奏音乐
+* 只允许真实声音：
+
+**物理音效**（必须使用前缀）
+`SFX: footsteps, fabric rustling, breathing, object handling`
+
+**环境音**（必须使用前缀）
+`Ambient noise: room tone, wind, distant traffic`
+
+* 必须明确写出：
+  **NO background music, NO BGM, NO soundtrack**
+
+---
+
+### 【角色名称保护】
+
+* 所有角色名称必须与输入 **完全一致**
+* 不允许翻译、音译或修改
+* 中文名必须原样保留
+
+---
+
+### 【风格要求】
+
+* 强调 **live-action realism**
+* cinematic, realistic, filmic
+* 情绪通过 **可见动作与最终画面状态**体现，禁止抽象情绪描述
+
+---
+
+### 【生成重点】
+
+* 明确从 **第一个分镜画面状态** 开始
+* 通过平滑连续运动
+* 自然过渡到 **第二个分镜画面状态**
+* 禁止引入新角色、新道具、新场景
+
+---
+
+### 【两个分镜的描述】
 
 {combined_text}
 
 ---
-
-## 示例参考
-
-**重要：所有示例中的角色名称都保持原始中文形式！**
-
-### 示例1：对话场景 - 镜头推进过渡
-
-输入：
-分镜1: 特写，李明坐在办公桌前，表情严肃
-角色: 李明
-分镜2: 中景，王芳站起身，面露难色
-角色: 王芳
-
-输出：
-Smooth dolly shot transition. Close-up of 李明 at office desk with serious expression and focused gaze. Camera slowly pulls back and pans right, revealing the modern office interior with soft overhead fluorescent lighting. 王芳 comes into frame in medium shot, standing up from her chair with worried expression. Ambient noise: quiet office atmosphere with subtle keyboard typing, distant phone ringing. Cinematic color grading with cool blue tones. Professional cinematography creating seamless narrative flow.
-
-### 示例2：动作场景 - 跟踪镜头
-
-输入：
-分镜1: 全景，张伟在街道上奔跑
-角色: 张伟
-分镜2: 特写，张伟停下脚步，气喘吁吁
-角色: 张伟
-
-输出：
-Dynamic tracking shot. Wide shot of 张伟 sprinting through urban street at dusk, his footsteps echoing on wet pavement. Camera follows with smooth tracking movement, maintaining consistent framing. Gradual push in to close-up as he slows down and stops, breathing heavily with relief. SFX: heavy breathing, footsteps on pavement, distant car horn. Ambient noise: city traffic in background. Natural lighting with slight motion blur during running. Moody cinematic aesthetic with desaturated colors.
-
-### 示例3：情感场景 - 缓慢推进
-
-输入：
-分镜1: 中景，小雨坐在窗边，望向窗外
-角色: 小雨
-分镜2: 特写，小雨的眼中泛起泪光
-角色: 小雨
-
-输出：
-Intimate slow push in. Medium shot of 小雨 sitting by rain-streaked window, gazing outside with melancholic expression. Soft natural window light illuminating her face with gentle shadows. Camera slowly pushes in for emotional close-up, revealing tears welling up in her eyes with trembling emotion. SFX: gentle rain drops on window glass. Ambient noise: distant thunder, quiet room tone. Shallow depth of field with soft bokeh in background. Contemplative mood with warm, muted color palette. Cinematic film photography aesthetic.
-
-### 示例4：环境过渡 - 摇臂镜头
-
-输入：
-分镜1: 全景，城堡外的荒野，暴风雨
-角色: 无
-分镜2: 中景，城堡大厅内，壁炉火光
-角色: 无
-
-输出：
-Dramatic crane shot transition. Wide establishing shot of desolate wilderness outside ancient castle, storm clouds gathering overhead with lightning flashing in distance. Camera performs sweeping crane movement, rising up and moving toward castle entrance. Smooth transition to medium shot of grand hall interior, warm fireplace light flickering on stone walls. SFX: howling wind, thunder rumbling, crackling fire. Ambient noise: storm outside transitioning to quiet interior ambience. High contrast lighting from dark exterior to warm interior glow. Epic cinematic scope with rich atmospheric detail. Moody, ominous aesthetic shifting to warm refuge.
-
----
-
-现在请为上述两个分镜生成过渡视频提示词："""
+"""
 
     @classmethod
     def get_transition_video_prompt(cls, combined_text: str) -> str:

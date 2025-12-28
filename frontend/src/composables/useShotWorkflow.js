@@ -10,6 +10,7 @@ import { useTaskPoller } from './useTaskPoller'
 export function useShotWorkflow(script) {
     const extracting = ref(false)
     const generatingKeyframes = ref(new Set()) // 使用Set跟踪多个并发生成
+    const extractingScenes = ref(new Set()) // 跟踪正在提取的场景
 
     const allShots = computed(() => {
         if (!script.value?.scenes) return []
@@ -122,12 +123,43 @@ export function useShotWorkflow(script) {
         }
     }
 
+    const extractSingleSceneShots = async (sceneId, apiKeyId, model, loadScript) => {
+        extractingScenes.value.add(sceneId)
+        try {
+            const response = await movieService.extractSingleSceneShots(sceneId, {
+                api_key_id: apiKeyId,
+                model
+            })
+
+            if (response.task_id) {
+                ElMessage.success('单场景分镜提取任务已提交')
+                const { startPolling } = useTaskPoller()
+                startPolling(response.task_id, async (result) => {
+                    ElMessage.success(`场景分镜提取完成: 生成 ${result.shot_count} 个分镜`)
+                    extractingScenes.value.delete(sceneId)
+                    // 只刷新script数据，不刷新整个页面
+                    if (script.value?.chapter_id && loadScript) {
+                        await loadScript(script.value.chapter_id, true) // skipStepUpdate=true
+                    }
+                }, (error) => {
+                    ElMessage.error(`提取失败: ${error.message}`)
+                    extractingScenes.value.delete(sceneId)
+                })
+            }
+        } catch (error) {
+            ElMessage.error('单场景分镜提取失败')
+            extractingScenes.value.delete(sceneId)
+        }
+    }
+
     return {
         allShots,
         sceneGroups,
         extracting,
         generatingKeyframes,
+        extractingScenes,
         extractShots,
+        extractSingleSceneShots,
         generateKeyframes,
         generateSingleKeyframe
     }

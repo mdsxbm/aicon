@@ -29,6 +29,17 @@
               <div class="scene-title-row">
                 <span class="scene-number">场景 {{ group.scene.order_index }}</span>
                 <el-tag size="small" type="info">{{ group.shots.length }} 个分镜</el-tag>
+                <el-button
+                  v-if="group.shots.length > 0"
+                  size="small"
+                  type="warning"
+                  :loading="extractingScenes.has(group.scene.id)"
+                  :disabled="extractingScenes.has(group.scene.id)"
+                  @click.stop="handleSingleSceneExtractClick(group.scene.id)"
+                  style="margin-left: 8px"
+                >
+                  {{ extractingScenes.has(group.scene.id) ? '提取中...' : '重新提取' }}
+                </el-button>
               </div>
               <div class="scene-characters" v-if="group.scene.characters && group.scene.characters.length > 0">
                 <el-tag 
@@ -139,10 +150,61 @@
       </template>
     </el-dialog>
 
+    <!-- 单场景重新提取警告对话框 -->
+    <el-dialog
+      v-model="showSingleSceneWarning"
+      title="重新提取场景分镜"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <div class="warning-content">
+        <div class="warning-icon">
+          <el-icon :size="60" color="#e6a23c">
+            <WarningFilled />
+          </el-icon>
+        </div>
+        
+        <div class="warning-title">
+          <h3>此操作将删除该场景的以下数据</h3>
+        </div>
+
+        <div class="warning-list">
+          <div class="warning-item">
+            <el-icon color="#e6a23c"><Delete /></el-icon>
+            <span>该场景的所有分镜脚本</span>
+          </div>
+          <div class="warning-item">
+            <el-icon color="#e6a23c"><Delete /></el-icon>
+            <span>该场景的所有关键帧图片</span>
+          </div>
+        </div>
+
+        <el-alert
+          type="warning"
+          :closable="false"
+          show-icon
+        >
+          <template #title>
+            <strong>⚠️ 其他场景的分镜不会受影响</strong>
+          </template>
+        </el-alert>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showSingleSceneWarning = false" size="large">取消</el-button>
+          <el-button type="warning" @click="handleSingleSceneWarningConfirm" size="large">
+            <el-icon><Delete /></el-icon>
+            确认删除并重新提取
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- API Key选择对话框 -->
     <el-dialog
       v-model="showDialog"
-      title="提取分镜"
+      :title="currentSceneId ? '重新提取场景分镜' : '提取分镜'"
       width="500px"
     >
       <el-form :model="formData" label-width="100px">
@@ -177,7 +239,13 @@
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleDialogConfirm" :disabled="!formData.apiKeyId || !formData.model">确定</el-button>
+        <el-button 
+          type="primary" 
+          @click="currentSceneId ? handleSingleSceneDialogConfirm() : handleDialogConfirm()" 
+          :disabled="!formData.apiKeyId || !formData.model"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -205,10 +273,14 @@ const props = defineProps({
   apiKeys: {
     type: Array,
     default: () => []
+  },
+  extractingScenes: {
+    type: Set,
+    default: () => new Set()
   }
 })
 
-const emit = defineEmits(['extract-shots'])
+const emit = defineEmits(['extract-shots', 'extract-single-scene-shots'])
 
 const activeScenes = ref([])
 const showDialog = ref(false)
@@ -219,6 +291,8 @@ const formData = ref({
 })
 const modelOptions = ref([])
 const loadingModels = ref(false)
+const currentSceneId = ref(null) // 当前要提取的场景ID
+const showSingleSceneWarning = ref(false) // 单场景警告对话框
 
 // 计算是否已有分镜
 const hasShots = computed(() => {
@@ -282,6 +356,30 @@ const handleDialogConfirm = () => {
   }
   emit('extract-shots', formData.value.apiKeyId, formData.value.model)
   showDialog.value = false
+}
+
+const handleSingleSceneExtractClick = (sceneId) => {
+  currentSceneId.value = sceneId
+  showSingleSceneWarning.value = true
+}
+
+const handleSingleSceneWarningConfirm = () => {
+  showSingleSceneWarning.value = false
+  // 确认后显示提取对话框
+  formData.value = {
+    apiKeyId: props.apiKeys[0]?.id || '',
+    model: ''
+  }
+  showDialog.value = true
+}
+
+const handleSingleSceneDialogConfirm = () => {
+  if (!formData.value.apiKeyId || !formData.value.model || !currentSceneId.value) {
+    return
+  }
+  emit('extract-single-scene-shots', currentSceneId.value, formData.value.apiKeyId, formData.value.model)
+  showDialog.value = false
+  currentSceneId.value = null
 }
 </script>
 

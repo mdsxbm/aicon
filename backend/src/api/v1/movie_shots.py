@@ -49,3 +49,15 @@ async def generate_single_keyframe(
     from src.tasks.movie import movie_generate_single_keyframe
     task = movie_generate_single_keyframe.delay(shot_id, req.api_key_id, req.model, req.prompt)
     return {"task_id": task.id, "message": "关键帧生成任务已提交"}
+
+@router.post("/scenes/{scene_id}/extract-shots", summary="从单个场景重新提取分镜")
+async def extract_single_scene_shots(
+    scene_id: str,
+    req: StoryboardExtractRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_required)
+):
+    """从单个场景重新提取分镜（先删除现有分镜，异步任务）"""
+    from src.tasks.movie import movie_extract_single_scene_shots
+    task = movie_extract_single_scene_shots.delay(scene_id, req.api_key_id, req.model)
+    return {"task_id": task.id, "message": "单场景分镜提取任务已提交"}

@@ -49,6 +49,24 @@ async def movie_extract_shots(db_session: AsyncSession, self, script_id: str, ap
 @celery_app.task(
     bind=True,
     max_retries=0,
+    name="movie.extract_single_scene_shots"
+)
+@async_task_decorator
+async def movie_extract_single_scene_shots(db_session: AsyncSession, self, scene_id: str, api_key_id: str, model: str = None):
+    """从单个场景重新提取分镜的 Celery 任务"""
+    from src.services.storyboard_service import StoryboardService
+    logger.info(f"Celery任务开始: movie_extract_single_scene_shots (scene_id={scene_id})")
+    
+    service = StoryboardService(db_session)
+    shots = await service.extract_shots_from_single_scene_with_deletion(scene_id, api_key_id, model)
+    
+    logger.info(f"Celery任务完成: movie_extract_single_scene_shots, 生成 {len(shots)} 个分镜")
+    return {"success": True, "shot_count": len(shots)}
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=0,
     name="movie.create_transitions"
 )
 @async_task_decorator

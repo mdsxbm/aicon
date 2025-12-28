@@ -89,11 +89,19 @@ export const movieService = {
     },
 
     /**
+     * 从单个场景重新提取分镜
+     */
+    extractSingleSceneShots(sceneId, data) {
+        return post(`/movie/scenes/${sceneId}/extract-shots`, data)
+    },
+
+    /**
      * 更新分镜信息
      */
     updateShot(shotId, data) {
         return put(`/movie/shots/${shotId}`, data)
     },
+
 
     // ==================== 关键帧管理 ====================
 
