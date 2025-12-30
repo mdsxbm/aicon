@@ -11,7 +11,7 @@
 
 **全自动AI电影生成演示** - 无需手动调整提示词和关键帧
 
-[![观看演示视频](https://img.shields.io/badge/🎬_观看演示-B站视频-00A1D6?style=for-the-badge&logo=bilibili)](https://www.bilibili.com/video/BV1PmvsBcE7F/)
+[![观看演示视频](https://img.shields.io/badge/🎬_观看演示-B站视频-00A1D6?style=for-the-badge&logo=bilibili)](https://www.bilibili.com/video/BV1DpvaB8EDE/?vd_source=2da8614f110387a6fe068f446424c748)
 
 > **💡 重要说明**：
 > - 本演示视频展示的是**完全自动化**生成的结果
