@@ -96,7 +96,6 @@ async def startup_event():
     app_logger.info("🚀 AICG平台正在启动...")
     app_logger.info(f"📝 环境: {settings.ENVIRONMENT}")
     app_logger.info(f"🌐 调试模式: {settings.DEBUG}")
-    app_logger.info(f"📊 监控: {settings.PROMETHEUS_ENABLED}")
     app_logger.info(f"🔗 API地址: http://0.0.0.0:8000")
     app_logger.info(f"📖 API文档: http://0.0.0.0:8000/docs")
 
@@ -164,7 +163,6 @@ async def app_info():
         "debug": settings.DEBUG,
         "api_prefix": settings.API_V1_PREFIX,
         "monitoring": {
-            "prometheus": settings.PROMETHEUS_ENABLED,
             "structured_logging": settings.STRUCTURED_LOGGING,
         },
     }
