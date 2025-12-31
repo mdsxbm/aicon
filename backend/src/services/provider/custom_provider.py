@@ -161,7 +161,7 @@ class CustomProvider(BaseLLMProvider):
         """
         base_url = self.base_url.replace("/v1", "")
         url = f"{base_url}/v1beta/models/gemini-3-pro-image-preview:generateContent?key={self.api_key}"
-        
+        logger.info(f"Gemini 生成图像 URL: {url}")
         # 构造 prompt 部分
         parts = [{"text": prompt}]
         
@@ -174,44 +174,42 @@ class CustomProvider(BaseLLMProvider):
             
             logger.info(f"处理 {len(reference_images)} 张参考图")
             
-            # 检查是否是MinIO key (以"uploads/"开头)
-            if reference_images and reference_images[0].startswith("uploads/"):
-                logger.info("检测到MinIO key,转换为presigned URL")
-                storage_client = await get_storage_client()
-                converted_urls = []
-                for key in reference_images[:5]:  # 最大5张
-                    try:
-                        presigned_url = storage_client.get_presigned_url(key, expires=timedelta(hours=1))
-                        converted_urls.append(presigned_url)
-                        logger.debug(f"MinIO key转URL: {key[:30]}...")
-                    except Exception as e:
-                        logger.warning(f"MinIO key转URL失败 {key}: {e}")
-                reference_images = converted_urls
+            # 直接使用参考图列表，后续下载逻辑会处理 uploads/ 开头的 Key
+            logger.info(f"开启角色一致性参考图处理，共 {len(reference_images)} 张")
             
             # 最大支持 5 张参考图
             for img_url in reference_images[:5]:
                 try:
-                    # 下载参考图并转 Base64
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(img_url, timeout=10) as resp:
-                            if resp.status == 200:
-                                img_data = await resp.read()
-                                b64_img = base64.b64encode(img_data).decode('utf-8')
-                                
-                                # 检测MIME类型
-                                mime_type = "image/jpeg"
-                                if img_data[:4] == b'\x89PNG':
-                                    mime_type = "image/png"
-                                
-                                parts.append({
-                                    "inline_data": {
-                                        "mime_type": mime_type,
-                                        "data": b64_img
-                                    }
-                                })
-                                logger.info(f"成功添加参考图: {img_url[:50]}...")
-                            else:
-                                logger.warning(f"下载参考图失败 HTTP {resp.status}: {img_url[:50]}...")
+                    img_data = None
+                    # 优先检查是否是 MinIO key (如果刚才没转换成功或者还是key形式)
+                    if img_url.startswith("uploads/"):
+                        storage_client = await get_storage_client()
+                        img_data = await storage_client.download_file(img_url)
+                        logger.info(f"从存储直接读取参考图: {img_url[:30]}...")
+                    else:
+                        # 下载参考图并转 Base64
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(img_url, timeout=10) as resp:
+                                if resp.status == 200:
+                                    img_data = await resp.read()
+                                else:
+                                    logger.warning(f"下载参考图失败 HTTP {resp.status}: {img_url[:50]}...")
+                    
+                    if img_data:
+                        b64_img = base64.b64encode(img_data).decode('utf-8')
+                        
+                        # 检测MIME类型
+                        mime_type = "image/jpeg"
+                        if img_data[:4] == b'\x89PNG':
+                            mime_type = "image/png"
+                        
+                        parts.append({
+                            "inline_data": {
+                                "mime_type": mime_type,
+                                "data": b64_img
+                            }
+                        })
+                        logger.info("成功添加参考图数据")
                 except Exception as e:
                     logger.warning(f"处理参考图失败 {img_url[:50]}...: {e}")
 

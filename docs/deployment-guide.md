@@ -51,14 +51,28 @@ docker-compose -f docker-compose.prod.yml ps
 - **API 文档**: http://localhost:8000/docs
 - **MinIO Console**: http://localhost:9001
 
-## 更新镜像
-
-当有新版本发布时,拉取最新镜像:
-
 ```bash
 docker-compose -f docker-compose.prod.yml pull
 docker-compose -f docker-compose.prod.yml up -d
 ```
+
+## 📖 AI 电影使用指引
+
+### 1. 注册获取 API Key
+推荐使用中转站以获得更低成本和更强性能:
+- **注册地址**: [https://api.aiconapi.me/](https://api.aiconapi.me/)
+- 获取令牌后,在系统后台配置。
+
+### 2. 系统配置
+在系统的 **API密钥管理** 中添加:
+- **供应商**: `自定义`
+- **Base URL**: `https://api.aiconapi.me/v1` (**末尾不带斜杠**)
+- **API密钥**: 填入你的令牌
+
+### 3. 开始创作
+1. **新建项目**: 选择“以章的方式”导入小说。
+2. **进入工作室**: 进入项目详情 -> “电影工作室”。
+3. **开始任务**: 按照顺序提取角色、场景、分镜,最后合成电影。
 
 ## 优势
 

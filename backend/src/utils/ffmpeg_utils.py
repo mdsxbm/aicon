@@ -11,6 +11,11 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+import shutil
+
+# 全局缓存 FFmpeg 检查结果
+_ffmpeg_installed_cache = None
+
 def check_ffmpeg_installed() -> bool:
     """
     检查FFmpeg是否已安装
@@ -18,19 +23,46 @@ def check_ffmpeg_installed() -> bool:
     Returns:
         如果FFmpeg可用返回True，否则返回False
     """
+    global _ffmpeg_installed_cache
+    
+    # 1. 检查缓存
+    if _ffmpeg_installed_cache is not None:
+        return _ffmpeg_installed_cache
+
+    # 2. 初步使用 shutil.which 检查命令是否存在
+    if not shutil.which("ffmpeg"):
+        logger.error("FFmpeg命令未找到，请确保已安装并加入PATH")
+        _ffmpeg_installed_cache = False
+        return False
+
+    # 3. 运行 ffmpeg -version 验证（增加超时时间）
     try:
+        logger.info("正在验证 FFmpeg 安装情况...")
         result = subprocess.run(
             ["ffmpeg", "-version"],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=20  # 从5s增加到20s，应对系统高负载
         )
+        
         if result.returncode == 0:
             logger.info("FFmpeg已安装并可用")
+            _ffmpeg_installed_cache = True
             return True
-        return False
-    except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
-        logger.error(f"FFmpeg检查失败: {e}")
+        else:
+            logger.error(f"FFmpeg验证失败，返回码: {result.returncode}")
+            _ffmpeg_installed_cache = False
+            return False
+            
+    except subprocess.TimeoutExpired:
+        logger.error("FFmpeg检查超时（20秒），可能是系统负载过高，暂时假设已安装")
+        # 如果超时但 shutil.which 过了，可能只是运行慢，返回 True 以避免阻塞业务
+        # 但我们不记录缓存，下次可能还需要重新检查，或者记录为 True 减少后续干扰
+        _ffmpeg_installed_cache = True 
+        return True
+    except Exception as e:
+        logger.error(f"FFmpeg检查异常: {e}")
+        _ffmpeg_installed_cache = False
         return False
 
 

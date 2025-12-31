@@ -13,136 +13,32 @@
 
 [![观看演示视频](https://img.shields.io/badge/🎬_观看演示-B站视频-00A1D6?style=for-the-badge&logo=bilibili)](https://www.bilibili.com/video/BV1DpvaB8EDE/?vd_source=2da8614f110387a6fe068f446424c748)
 
-> **💡 重要说明**：
-> - 本演示视频展示的是**完全自动化**生成的结果
-> - 未对提示词进行深度调整，未手动优化关键帧
-> - 如果您了解电影摄影、镜头语言和提示词工程，可以获得**更专业的效果**
-> - 系统支持在每个环节手动调整提示词、选择历史版本，实现精细化控制
+---
 
-**技术亮点**：
-- ✅ 从小说文本到完整电影的全流程自动化
-- ✅ 智能场景分析、分镜生成、角色一致性保持
-- ✅ 自动生成过渡视频，实现流畅的镜头衔接
-- ✅ 支持历史版本管理，可随时切换和对比不同生成结果
+## ✨ 核心功能
+
+### 🎥 AI 电影工作室 (Movie Studio)
+**革命性的全自动电影制作流程，将文学作品直接转化为视听大片。**
+- **🔍 智能剧本解析**：利用 LLM 深度理解文本，自动提取关键角色、高密度电影场景及精细分镜（Shot），并智能生成导演级的景别、构图与灯光描述。
+- **🎭 角色一致性 (Character Consistency)**：内置视觉一致性引擎，通过角色定妆照与参考图技术，确保同一角色在不同分镜中容貌高度统一，解决 AI 视频“换脸”痛点。
+- **🎬 动态过渡生成**：集成先进的视频生成模型，为相邻分镜自动创建平滑的过渡视频（Transition），支持推拉摇移等电影感镜头运动。
+- **🎵 视听一键合成**：背景音乐（BGM）管理、合成背景音效，一键输出符合主流视频平台标准的电影短片。
+
+### 🎨 AI 图文说生成器 (Picture Narration)
+**为短视频创作者打造的极速生产力工具。**
+- **📖 智能章节识别**：自动解析长文本结构，实现段落智能分割与核心语义提取。
+- **🎯 导演引擎 (Director Engine)**：AI 自动为每一段话匹配最适合的视觉提示词（Prompts）与构图设计。
+- **🖼️ 批量素材生产**：支持多模型并发调用，批量生成高质量配图与极具情感表现力的 TTS 语音。
+- **🎞️ 自动渲染合成**：图片、语音、字幕与背景音乐实时对齐，分钟级产出可直接发布的短视频。
+
+### 🚀 自动化分发
+- **📺 B站一键发布**：深度集成 Bilibili API，支持视频自动上传、标题摘要生成及标签智能推荐，打通创作到分发的最后一公里。
 
 ---
 
-## 🌟 核心亮点
+## 🚀 快速开始 (Docker部署)
 
-### 🎥 AI电影工作室 - 重磅功能
-
-**从文字到电影，全自动AI电影生成流水线**
-
-- **📝 智能剧本解析** - 自动提取场景、分镜、角色，构建完整电影结构
-- **🎨 角色定妆照生成** - AI生成一致性角色形象，支持多视角参考图
-- **🖼️ 场景图生成** - 为每个场景生成氛围图，确保视觉连贯性
-- **🎞️ 关键帧生成** - 智能生成分镜关键帧，支持前后帧参考保持连续性
-- **🎬 过渡视频生成** - 自动生成分镜间过渡视频，实现流畅衔接
-- **📜 生成历史管理** - 记录所有生成版本，支持历史版本切换和对比
-- **🔄 智能提示词重生成** - 使用LLM自动优化视频生成提示词
-- **🎵 BGM配乐** - 智能配乐系统，为电影添加背景音乐
-- **📦 一键合成** - 自动合成所有素材，输出完整电影
-
-**工作流程**：
-```
-文字剧本 → 角色提取 → 场景分析 → 分镜生成 → 
-关键帧渲染 → 过渡视频 → BGM配乐 → 最终合成 → 完整电影
-```
-
-### 🎨 AI图文说内容生成
-
-**传统图文说视频制作的智能化升级**
-
-- **📖 智能分段** - 自动将长文本分割为适合视频的段落
-- **🎯 AI导演引擎** - 智能生成每个段落的视觉提示词
-- **🖼️ 批量图片生成** - 支持多种AI模型，批量生成配图
-- **🎙️ 智能配音** - 文字转语音，支持多种音色和语速
-- **🎬 自动合成** - 图片、配音、字幕自动合成为视频
-
-### 📺 B站一键发布
-
-- **🚀 自动上传** - 视频自动上传到B站
-- **📝 智能标题** - AI生成吸引人的标题和简介
-- **🏷️ 标签推荐** - 智能推荐相关标签
-- **📊 发布管理** - 统一管理所有发布任务
-
-## 🏗️ 技术架构
-
-### 后端技术栈
-
-- **框架**: FastAPI + SQLAlchemy + Alembic
-- **数据库**: PostgreSQL
-- **任务队列**: Celery + Redis
-- **存储**: MinIO (S3兼容)
-- **AI集成**: 
-  - 文本生成: OpenAI GPT / Google Gemini
-  - 图片生成: Stable Diffusion / DALL-E / Gemini
-  - 视频生成: VectorEngine / Runway
-  - 语音合成: Azure TTS / 其他TTS服务
-
-### 前端技术栈
-
-- **框架**: Vue 3 + Vite
-- **UI库**: Element Plus
-- **状态管理**: Pinia
-- **路由**: Vue Router
-- **HTTP客户端**: Axios
-
-### 核心特性
-
-- ✅ **异步任务处理** - Celery分布式任务队列
-- ✅ **实时状态追踪** - WebSocket实时更新
-- ✅ **模块化设计** - 清晰的代码结构和职责分离
-- ✅ **RESTful API** - 标准化的API设计
-- ✅ **数据库迁移** - Alembic版本控制
-- ✅ **对象存储** - MinIO文件管理
-- ✅ **多模型支持** - 灵活切换不同AI服务商
-
-## 📁 项目结构
-
-```
-aicon2/
-├── backend/                 # 后端服务
-│   ├── src/
-│   │   ├── api/            # API路由和端点
-│   │   │   ├── v1/         # API v1版本
-│   │   │   │   ├── movie_*.py    # 电影生成相关API
-│   │   │   │   ├── generation_history.py  # 生成历史API
-│   │   │   │   └── ...
-│   │   │   └── schemas/    # Pydantic数据模型
-│   │   ├── models/         # SQLAlchemy数据模型
-│   │   ├── services/       # 业务逻辑层
-│   │   │   ├── movie.py           # 电影服务
-│   │   │   ├── generation_history_service.py
-│   │   │   └── ...
-│   │   ├── tasks/          # Celery异步任务
-│   │   ├── core/           # 核心配置
-│   │   └── utils/          # 工具函数
-│   ├── migrations/         # 数据库迁移
-│   └── tests/             # 测试文件
-│
-├── frontend/               # 前端应用
-│   ├── src/
-│   │   ├── views/         # 页面组件
-│   │   │   └── studio/    # 电影工作室
-│   │   ├── components/    # 可复用组件
-│   │   │   └── studio/    # 工作室组件
-│   │   ├── composables/   # Vue组合式函数
-│   │   ├── services/      # API服务
-│   │   ├── stores/        # Pinia状态管理
-│   │   └── utils/         # 工具函数
-│   └── public/            # 静态资源
-│
-└── docs/                  # 项目文档
-    ├── movie_generation_workflow.md  # 电影生成流程文档
-    └── ...
-```
-
-## 🚀 快速开始
-
-### 推荐方式: Docker部署 (一键启动)
-
-使用Docker是最简单、最快速的部署方式,无需手动配置各种依赖。
+使用Docker是最简单、最快速的部署方式。
 
 ```bash
 # 1. 克隆项目
@@ -151,275 +47,43 @@ cd aicon
 
 # 2. 配置环境变量
 cp .env.production.example .env.production
-# 编辑 .env.production,修改以下必要配置:
-# - POSTGRES_PASSWORD (数据库密码)
-# - REDIS_PASSWORD (Redis密码)
-# - MINIO_ROOT_PASSWORD (MinIO密码)
-# - JWT_SECRET_KEY (JWT密钥)
-# - API_KEY_ENCRYPTION_KEY (API密钥加密密钥)
+# 编辑 .env.production, 修改必要配置
 
-# 3. 启动所有服务 (一键启动)
+# 3. 启动所有服务
 docker-compose -f docker-compose.prod.yml up -d
 
-# 4. 查看服务状态
-docker-compose -f docker-compose.prod.yml ps
-
-# 5. 访问应用
+# 4. 访问应用
 # 前端: http://localhost
 # 后端API: http://localhost:8000
-# API文档: http://localhost:8000/docs
-# MinIO控制台: http://localhost:9001
-```
-
-**服务说明:**
-- ✅ 前端 (Vue3 + Nginx)
-- ✅ 后端 (FastAPI)
-- ✅ Celery Worker (异步任务)
-- ✅ Celery Beat (定时任务)
-- ✅ PostgreSQL (数据库)
-- ✅ Redis (缓存和消息队列)
-- ✅ MinIO (对象存储)
-
-**查看日志:**
-```bash
-# 查看所有服务日志
-docker-compose -f docker-compose.prod.yml logs -f
-
-# 查看特定服务日志
-docker-compose -f docker-compose.prod.yml logs -f backend
-docker-compose -f docker-compose.prod.yml logs -f celery-worker
-```
-
-**停止服务:**
-```bash
-docker-compose -f docker-compose.prod.yml down
 ```
 
 📖 **详细部署文档**: 查看 [Docker部署指南](docs/docker-deployment-guide.md)
 
 ---
 
-### 方式二: 本地开发环境
+## 📖 使用教程
 
-适合开发调试,需要手动配置各种依赖。
+### 1. 获取 API Key
+本系统支持多种 AI 模型,推荐使用中转站以获得更低成本和更强性能:
+- **注册地址**: [https://api.aiconapi.me/](https://api.aiconapi.me/)
+- 注册并购买额度后,在令牌(API Key)页面创建一个新的 Key。
+- 请按需购，用多少买多少。
 
-#### 环境要求
+### 2. 配置系统 API Key
+进入系统后台,在 **API密钥管理** 页面点击添加:
+- **供应商/类型**: 选择 `自定义`
+- **API密钥**: 填入你在中转站获取的令牌
+- **Base URL**: `https://api.aiconapi.me/v1`
+> [!IMPORTANT]
+> **重点**: Base URL 结尾 **不可以带斜杠** (即不要写成 `v1/`),否则请求会报错。
 
-- Python 3.12+
-- Node.js 18+
-- PostgreSQL 14+
-- Redis 6+
-- MinIO (或其他S3兼容存储)
-
-#### 后端启动
-
-```bash
-cd backend
-
-# 创建虚拟环境
-uv sync
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env 文件,配置数据库、Redis、MinIO等
-
-# 运行数据库迁移
-uv run alembic upgrade head
-
-# 启动后端服务
-uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-
-# 启动Celery Worker（新终端）
-uv run celery -A src.tasks.app worker --loglevel=info
-
-# 启动Celery Beat 定时任务（新终端）
-uv run celery -A src.tasks.app beat --loglevel=info
-```
-
-#### 前端启动
-
-```bash
-cd frontend
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-```
-
-访问 `http://localhost:3000` 即可使用系统。
-
-#### 基础设施服务 (本地开发需要)
-
-如果使用本地开发方式,需要先启动基础设施服务:
-
-```bash
-# 启动 PostgreSQL, Redis, MinIO
-docker-compose up -d
-```
-
-## 🎯 主要功能模块
-
-### 1. 项目管理
-- 创建和管理内容项目
-- 支持文本导入和在线编辑
-- 项目版本控制
-
-### 2. 电影工作室
-- **角色管理**: 提取角色、生成定妆照
-- **场景管理**: 场景提取、场景图生成
-- **分镜管理**: 分镜提取、关键帧生成
-- **过渡视频**: 创建过渡、生成视频、提示词优化
-- **素材检查**: 自动检查所有素材完整性
-- **电影合成**: 一键合成完整电影
-
-### 3. 图文说工作室
-- 段落分割和管理
-- 批量图片生成
-- 配音生成
-- 视频合成
-
-### 4. API密钥管理
-- 支持多个AI服务商
-- 密钥安全存储
-- 使用统计
-
-### 5. 视频任务管理
-- 任务列表和状态追踪
-- 失败重试
-- 批量操作
-
-### 6. B站发布
-- 视频上传
-- 元数据编辑
-- 发布状态管理
-
-## 🔧 配置说明
-
-### 环境变量
-
-主要环境变量配置（`.env`文件）：
-
-```env
-# 数据库配置
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/aicg
-
-# Redis配置
-REDIS_URL=redis://localhost:6379/0
-
-# MinIO配置
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET=aicg-platform
-
-# AI服务配置
-OPENAI_API_KEY=your-openai-key
-GEMINI_API_KEY=your-gemini-key
-
-# 应用配置
-SECRET_KEY=your-secret-key
-DEBUG=true
-```
-
-## 📊 数据库设计
-
-### 核心表结构
-
-- **projects** - 项目信息
-- **chapters** - 章节管理
-- **movie_scripts** - 电影剧本
-- **movie_scenes** - 场景信息
-- **movie_shots** - 分镜信息
-- **movie_characters** - 角色信息
-- **movie_shot_transitions** - 过渡视频
-- **movie_generation_history** - 生成历史记录（统一表）
-- **video_tasks** - 视频任务
-- **api_keys** - API密钥
-
-## 🎨 生成历史功能
-
-系统为所有生成内容提供完整的历史记录管理：
-
-- **版本追踪**: 记录每次生成的结果
-- **历史切换**: 随时切换到任意历史版本
-- **提示词记录**: 保存每次生成使用的提示词
-- **模型信息**: 记录使用的AI模型
-- **时间戳**: 完整的生成时间记录
-
-支持的资源类型：
-- 场景图 (scene_image)
-- 关键帧 (shot_keyframe)
-- 角色头像 (character_avatar)
-- 过渡视频 (transition_video)
-
-## 🤝 贡献指南
-
-欢迎贡献代码、报告问题或提出新功能建议！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 📝 开发日志
-
-### v2.0.0 - AI电影工作室 (2025-12-29)
-
-**🎬 重磅更新：AI电影生成功能**
-
-- ✨ 完整的电影生成工作流
-- ✨ 角色、场景、分镜智能提取
-- ✨ 关键帧和过渡视频生成
-- ✨ 生成历史管理系统
-- ✨ LLM驱动的提示词优化
-- ✨ 一键电影合成
-
-### v1.0.0 - 基础功能 (2024)
-
-- 🎨 图文说视频生成
-- 📺 B站自动发布
-- 🔑 API密钥管理
-- 📊 任务管理系统
-
-## 📄 许可证
-
-本项目采用 Apache License 2.0 许可证 - 详见 [LICENSE](LICENSE) 文件
-
-### 关于 Apache 2.0
-
-Apache License 2.0 是一个宽松的开源许可证，允许您：
-- ✅ 自由使用、修改和分发本软件
-- ✅ 用于商业目的
-- ✅ 获得专利授权保护
-
-但需要：
-- 📋 保留版权声明和许可证声明
-- 📝 标注对原始代码的修改
-- 🚫 不得使用项目名称或贡献者名字做推广
-
-详细条款请参阅 [LICENSE](LICENSE) 文件。
-
-## 🙏 致谢
-
-感谢以下开源项目和服务：
-
-- [FastAPI](https://fastapi.tiangolo.com/) - 现代化的Python Web框架
-- [Vue.js](https://vuejs.org/) - 渐进式JavaScript框架
-- [Element Plus](https://element-plus.org/) - Vue 3 UI组件库
-- [Celery](https://docs.celeryq.dev/) - 分布式任务队列
-- [SQLAlchemy](https://www.sqlalchemy.org/) - Python ORM
-- [MinIO](https://min.io/) - 高性能对象存储
-
-以及所有AI服务提供商：OpenAI、Google、Azure等
-
-## 📧 联系方式
-
-- 项目主页: [GitHub](https://github.com/869413421/aicon2)
-- 问题反馈: [Issues](https://github.com/869413421/aicon2/issues)
+### 3. 开始创作 AI 电影
+1. **新建项目**: 在项目管理页面点击“新建项目”。
+2. **导入文本**: 建议选择 **“以章的方式”** 导入小说或剧本内容。
+3. **进入工作室**: 项目创建完成后,点击进入项目详情,选择 **“电影工作室”** 标签。
+4. **一键生成**: 按照角色提取 -> 场景提取 -> 分镜生成 -> 视频合成的顺序,开启你的创作之旅。
 
 ---
 
-⭐ 如果这个项目对你有帮助，请给个Star支持一下！
+## 📄 许可证
+本项目采用 Apache License 2.0 许可证 - 详见 [LICENSE](LICENSE) 文件

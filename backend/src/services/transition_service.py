@@ -388,32 +388,34 @@ class TransitionService(BaseService):
                 continue
             
             try:
-                # 如果是MinIO key，转换为presigned URL
+                # 如果是MinIO key，直接从内部存储获取，避免 localhost 访问失败
                 keyframe_url = shot.keyframe_url
+                img_data = None
+                
                 if keyframe_url.startswith("uploads/"):
                     storage_client = await get_storage_client()
-                    keyframe_url = storage_client.get_presigned_url(
-                        keyframe_url, 
-                        expires=timedelta(hours=1)
-                    )
+                    img_data = await storage_client.download_file(keyframe_url)
+                    logger.info(f"成功从内部存储直接加载{shot_name}关键帧数据")
+                else:
+                    # 下载关键帧并转base64
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(keyframe_url, timeout=10) as resp:
+                            if resp.status == 200:
+                                img_data = await resp.read()
+                                logger.info(f"成功通过URL加载{shot_name}关键帧")
+                            else:
+                                logger.warning(f"下载{shot_name}关键帧失败: HTTP {resp.status}")
                 
-                # 下载关键帧并转base64
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(keyframe_url, timeout=10) as resp:
-                        if resp.status == 200:
-                            img_data = await resp.read()
-                            b64_img = base64.b64encode(img_data).decode('utf-8')
-                            
-                            # 检测MIME类型
-                            mime_type = "image/jpeg"
-                            if img_data[:4] == b'\x89PNG':
-                                mime_type = "image/png"
-                            
-                            # VectorEngine使用data URL格式
-                            keyframe_images.append(f"data:{mime_type};base64,{b64_img}")
-                            logger.info(f"成功加载{shot_name}关键帧")
-                        else:
-                            logger.warning(f"下载{shot_name}关键帧失败: HTTP {resp.status}")
+                if img_data:
+                    b64_img = base64.b64encode(img_data).decode('utf-8')
+                    
+                    # 检测MIME类型
+                    mime_type = "image/jpeg"
+                    if img_data[:4] == b'\x89PNG':
+                        mime_type = "image/png"
+                    
+                    # VectorEngine使用data URL格式
+                    keyframe_images.append(f"data:{mime_type};base64,{b64_img}")
             except Exception as e:
                 logger.warning(f"处理{shot_name}关键帧失败: {e}")
         
@@ -737,8 +739,8 @@ class TransitionService(BaseService):
                         # 获取user_id
                         user_id = str(transition.user_id) if transition.user_id else "system"
                         
-                        # 下载视频
-                        async with httpx.AsyncClient() as client:
+                        # 下载视频 (增加超时设置: 连接30s, 读取300s)
+                        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout=300.0, connect=30.0)) as client:
                             response = await client.get(video_url)
                             response.raise_for_status()
                             video_content = response.content
@@ -813,9 +815,13 @@ class TransitionService(BaseService):
                 
                 synced_count += 1
                 
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                # 网络超时或连接错误，不标记失败，允许下一次重试
+                logger.warning(f"同步过渡 {transition.id} 遭遇网络异常(超时/连接), 将在下次循环重试: {e}")
+                continue
             except Exception as e:
                 error_msg = f"同步失败: {str(e)}"
-                logger.error(f"同步过渡 {transition.id} 失败: {e}", exc_info=True)
+                logger.error(f"同步过渡 {transition.id} 遭遇不可恢复失败: {e}", exc_info=True)
                 
                 # 记录错误信息（确保是字符串）
                 transition.status = "failed"

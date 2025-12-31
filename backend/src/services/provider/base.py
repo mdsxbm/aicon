@@ -20,6 +20,7 @@ def log_provider_call(method_name: str):
         async def wrapper(self, *args, **kwargs):
             # 记录请求开始
             start_time = time.time()
+            base_url = self.base_url
             provider_name = self.__class__.__name__
             
             # 构建请求日志
@@ -27,7 +28,8 @@ def log_provider_call(method_name: str):
                 "provider": provider_name,
                 "method": method_name,
                 "args": _sanitize_for_log(args),
-                "kwargs": _sanitize_for_log(kwargs)
+                "kwargs": _sanitize_for_log(kwargs),
+                "base_url": base_url
             }
             
             logger.info(f"[{provider_name}] {method_name} 请求开始")

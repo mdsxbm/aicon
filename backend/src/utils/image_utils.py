@@ -168,6 +168,42 @@ async def _download_image_from_url(image_url: str) -> Tuple[bytes, str]:
     
     else:
         # HTTP/HTTPS URL
+        # 优化：如果是指向本系统的 MinIO，尝试直接从存储读取，避免 Docker 内部 localhost 连接问题
+        from src.core.config import settings
+        
+        # 检查是否是内部 MinIO URL (通过判断是否包含公共 URL 域名)
+        is_internal = False
+        object_key = None
+        
+        if settings.MINIO_PUBLIC_URL:
+            # 移除协议头进行匹配
+            public_domain = settings.MINIO_PUBLIC_URL.replace("http://", "").replace("https://", "").rstrip('/')
+            if public_domain in image_url:
+                # 尝试从 URL 中提取 key (通常格式是 /bucket/uploads/...)
+                import urllib.parse
+                parsed_url = urllib.parse.urlparse(image_url)
+                path_parts = parsed_url.path.split('/')
+                # 查找 uploads 所在的索引
+                if "uploads" in path_parts:
+                    idx = path_parts.index("uploads")
+                    object_key = "/".join(path_parts[idx:])
+                    is_internal = True
+                    logger.info(f"检测到内部 MinIO URL, 提取 Key: {object_key}")
+        
+        if is_internal and object_key:
+            try:
+                storage_client = await get_storage_client()
+                image_bytes = await storage_client.download_file(object_key)
+                mime_type = 'image/png' # 默认，后续会自动处理
+                if image_bytes[:4] == b'\xff\xd8\xff\xe0': mime_type = 'image/jpeg'
+                elif image_bytes[:4] == b'\x89PNG': mime_type = 'image/png'
+                
+                logger.info(f"通过内部存储直接读取图片成功, 大小: {len(image_bytes)} bytes")
+                return image_bytes, mime_type
+            except Exception as e:
+                logger.warning(f"内部读取失败，回退到网络下载: {e}")
+
+        # 正常下载
         async with aiohttp.ClientSession() as session:
             async with session.get(image_url) as resp:
                 if resp.status != 200:

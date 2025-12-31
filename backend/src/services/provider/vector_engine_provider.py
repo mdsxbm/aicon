@@ -18,6 +18,7 @@ class VectorEngineProvider:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
+        self.timeout = httpx.Timeout(60.0, connect=20.0)
 
     @log_provider_call("create_video")
     async def create_video(
@@ -44,7 +45,7 @@ class VectorEngineProvider:
         }
         payload.update(kwargs)
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(url, headers=self.headers, json=payload)
                 response.raise_for_status()
@@ -62,7 +63,7 @@ class VectorEngineProvider:
         查询任务状态
         """
         url = f"{self.base_url}/videos/{task_id}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.get(url, headers=self.headers)
                 response.raise_for_status()
@@ -77,7 +78,7 @@ class VectorEngineProvider:
         获取视频内容（包含下载链接）
         """
         url = f"{self.base_url}/videos/{task_id}/content"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.get(url, headers=self.headers)
                 response.raise_for_status()
