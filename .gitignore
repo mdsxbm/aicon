@@ -376,7 +376,6 @@ test-results.json
 # Image files (generated)
 *.jpg
 *.jpeg
-*.png
 *.gif
 *.bmp
 *.tiff
