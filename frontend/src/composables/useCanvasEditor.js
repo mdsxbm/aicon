@@ -1,10 +1,24 @@
 import { computed, ref } from 'vue'
 import { canvasService } from '@/services/canvas'
+import { DEFAULT_ASPECT_RATIO } from '@/utils/canvasGenerationPayload'
 
 const DEFAULT_CONTENT = {
   text: () => ({ text: '', text_preview: '', prompt: '', promptTokens: [] }),
-  image: () => ({ prompt: '', result_image_url: '', reference_image_url: '', style_reference_image_object_key: '', promptTokens: [] }),
-  video: () => ({ prompt: '', result_video_url: '', reference_image_urls: [], reference_text_ids: [], promptTokens: [] })
+  image: () => ({
+    prompt: '',
+    result_image_url: '',
+    reference_image_url: '',
+    style_reference_image_object_key: '',
+    aspectRatio: DEFAULT_ASPECT_RATIO,
+    promptTokens: []
+  }),
+  video: () => ({
+    prompt: '',
+    result_video_url: '',
+    reference_image_urls: [],
+    reference_text_ids: [],
+    promptTokens: []
+  })
 }
 
 const DEFAULT_SIZE = {
@@ -26,11 +40,13 @@ const stripTransientMediaUrls = (payload = {}) => {
   }
 
   const sanitized = { ...payload }
-  Object.entries(MEDIA_URL_TO_OBJECT_KEY_FIELDS).forEach(([urlField, objectKeyField]) => {
-    if (sanitized[objectKeyField]) {
-      delete sanitized[urlField]
+  Object.entries(MEDIA_URL_TO_OBJECT_KEY_FIELDS).forEach(
+    ([urlField, objectKeyField]) => {
+      if (sanitized[objectKeyField]) {
+        delete sanitized[urlField]
+      }
     }
-  })
+  )
   return sanitized
 }
 
@@ -50,8 +66,8 @@ export function useCanvasEditor() {
   const persistTimers = new Map()
   const detailLoading = new Set()
 
-  const selectedItem = computed(() =>
-    items.value.find((item) => item.id === selectedItemId.value) || null
+  const selectedItem = computed(
+    () => items.value.find((item) => item.id === selectedItemId.value) || null
   )
 
   const maxZIndex = computed(() =>
@@ -67,12 +83,20 @@ export function useCanvasEditor() {
     width: Number(item.width || DEFAULT_SIZE[item.item_type]?.width || 320),
     height: Number(item.height || DEFAULT_SIZE[item.item_type]?.height || 220),
     z_index: Number(item.z_index || 0),
-    content: { ...(DEFAULT_CONTENT[item.item_type]?.() || {}), ...(item.content || {}) },
+    content: {
+      ...(DEFAULT_CONTENT[item.item_type]?.() || {}),
+      ...(item.content || {})
+    },
     generation_config: { ...(item.generation_config || {}) },
     last_run_status: item.last_run_status || 'idle',
     last_run_error: item.last_run_error || null,
     last_output: { ...(item.last_output || {}) },
-    has_detail: Boolean(item.has_detail || item.content?.text || item.content?.prompt || item.content?.promptTokens?.length),
+    has_detail: Boolean(
+      item.has_detail ||
+        item.content?.text ||
+        item.content?.prompt ||
+        item.content?.promptTokens?.length
+    ),
     is_persisted: true
   })
 
@@ -85,16 +109,25 @@ export function useCanvasEditor() {
   })
 
   const mergeItem = (itemId, patch) => {
-    const hasLastOutput = Object.prototype.hasOwnProperty.call(patch, 'last_output')
+    const hasLastOutput = Object.prototype.hasOwnProperty.call(
+      patch,
+      'last_output'
+    )
     items.value = items.value.map((item) =>
       item.id === itemId
         ? {
-          ...item,
-          ...patch,
-          content: patch.content ? { ...item.content, ...patch.content } : item.content,
-          generation_config: patch.generation_config ? { ...item.generation_config, ...patch.generation_config } : item.generation_config,
-          last_output: hasLastOutput ? { ...(patch.last_output || {}) } : item.last_output
-        }
+            ...item,
+            ...patch,
+            content: patch.content
+              ? { ...item.content, ...patch.content }
+              : item.content,
+            generation_config: patch.generation_config
+              ? { ...item.generation_config, ...patch.generation_config }
+              : item.generation_config,
+            last_output: hasLastOutput
+              ? { ...(patch.last_output || {}) }
+              : item.last_output
+          }
         : item
     )
   }
@@ -150,7 +183,9 @@ export function useCanvasEditor() {
 
     detailLoading.add(itemId)
     try {
-      const detail = normalizeItem(await canvasService.getItem(currentDocumentId, itemId))
+      const detail = normalizeItem(
+        await canvasService.getItem(currentDocumentId, itemId)
+      )
       mergeItem(itemId, {
         ...detail,
         has_detail: true
@@ -166,7 +201,9 @@ export function useCanvasEditor() {
     try {
       const snapshot = await canvasService.getLite(documentId)
       document.value = snapshot.document
-      items.value = (snapshot.items || []).map((item) => normalizeItem({ ...item, has_detail: false }))
+      items.value = (snapshot.items || []).map((item) =>
+        normalizeItem({ ...item, has_detail: false })
+      )
       connections.value = (snapshot.connections || []).map(normalizeConnection)
       selectedItemId.value = items.value[0]?.id || null
       dirty.value = false
@@ -186,7 +223,11 @@ export function useCanvasEditor() {
         await persistItemNow(itemId)
       }
       dirty.value = false
-      return { document: document.value, items: items.value, connections: connections.value }
+      return {
+        document: document.value,
+        items: items.value,
+        connections: connections.value
+      }
     } finally {
       saving.value = false
     }
@@ -194,26 +235,33 @@ export function useCanvasEditor() {
 
   const createItem = async (itemType, position = {}) => {
     if (!currentDocumentId) return null
-    const count = items.value.filter((item) => item.item_type === itemType).length
+    const count = items.value.filter(
+      (item) => item.item_type === itemType
+    ).length
     const size = DEFAULT_SIZE[itemType] || DEFAULT_SIZE.text
     const payload = {
       item_type: itemType,
       title:
-        itemType === 'text' ? `文本节点 ${count + 1}` :
-          itemType === 'image' ? `图片节点 ${count + 1}` :
-            `视频节点 ${count + 1}`,
-      position_x: Number(position.position_x ?? (120 + count * 24)),
-      position_y: Number(position.position_y ?? (120 + count * 24)),
+        itemType === 'text'
+          ? `文本节点 ${count + 1}`
+          : itemType === 'image'
+            ? `图片节点 ${count + 1}`
+            : `视频节点 ${count + 1}`,
+      position_x: Number(position.position_x ?? 120 + count * 24),
+      position_y: Number(position.position_y ?? 120 + count * 24),
       width: size.width,
       height: size.height,
       z_index: maxZIndex.value + 1,
       content: DEFAULT_CONTENT[itemType](),
-      generation_config: {},
+      generation_config:
+        itemType === 'video' ? { aspectRatio: DEFAULT_ASPECT_RATIO } : {},
       last_run_status: 'idle',
       last_run_error: null,
       last_output: {}
     }
-    const created = normalizeItem(await canvasService.createItem(currentDocumentId, payload))
+    const created = normalizeItem(
+      await canvasService.createItem(currentDocumentId, payload)
+    )
     items.value = [...items.value, { ...created, has_detail: true }]
     selectedItemId.value = created.id
     return created
@@ -233,7 +281,9 @@ export function useCanvasEditor() {
     await canvasService.deleteItem(currentDocumentId, itemId)
     items.value = items.value.filter((item) => item.id !== itemId)
     connections.value = connections.value.filter(
-      (connection) => connection.source_item_id !== itemId && connection.target_item_id !== itemId
+      (connection) =>
+        connection.source_item_id !== itemId &&
+        connection.target_item_id !== itemId
     )
     if (selectedItemId.value === itemId) {
       selectedItemId.value = items.value[0]?.id || null
@@ -276,12 +326,14 @@ export function useCanvasEditor() {
     )
 
     if (!exists) {
-      const created = normalizeConnection(await canvasService.createConnection(currentDocumentId, {
-        source_item_id: pendingConnection.value.itemId,
-        target_item_id: itemId,
-        source_handle: pendingConnection.value.handle,
-        target_handle: handle
-      }))
+      const created = normalizeConnection(
+        await canvasService.createConnection(currentDocumentId, {
+          source_item_id: pendingConnection.value.itemId,
+          target_item_id: itemId,
+          source_handle: pendingConnection.value.handle,
+          target_handle: handle
+        })
+      )
       connections.value = [...connections.value, created]
     }
 
@@ -291,10 +343,15 @@ export function useCanvasEditor() {
   const removeConnection = async (connectionId) => {
     if (!currentDocumentId) return
     await canvasService.deleteConnection(currentDocumentId, connectionId)
-    connections.value = connections.value.filter((connection) => connection.id !== connectionId)
+    connections.value = connections.value.filter(
+      (connection) => connection.id !== connectionId
+    )
   }
 
-  const updateViewport = ({ zoom: nextZoom = zoom.value, pan: nextPan = pan.value }) => {
+  const updateViewport = ({
+    zoom: nextZoom = zoom.value,
+    pan: nextPan = pan.value
+  }) => {
     zoom.value = Math.min(2, Math.max(0.5, Number(nextZoom)))
     pan.value = {
       x: Number(nextPan.x || 0),

@@ -35,7 +35,7 @@ const applyGenerationResultToContent = (itemType, currentContent = {}, resultPay
   return nextContent
 }
 
-export function useCanvasGeneration(updateItem) {
+export function useCanvasGeneration(updateItem, getItemById = () => null) {
   const state = reactive({
     loadingByItem: {},
     histories: {},
@@ -343,11 +343,20 @@ export function useCanvasGeneration(updateItem) {
     return streamMediaGeneration(item, payload)
   }
 
-  const applyGeneration = async (itemId, generationId) => {
+  const applyGeneration = async (itemOrId, generationId) => {
+    const currentItemFromArg = typeof itemOrId === 'object' && itemOrId !== null ? itemOrId : null
+    const itemId = currentItemFromArg?.id || itemOrId
+    const currentItem = currentItemFromArg || getItemById(itemId) || null
     const response = await canvasService.applyGeneration(itemId, generationId)
     updateItem(itemId, {
-      content: response.item.content,
-      generation_config: response.item.generation_config,
+      content: {
+        ...(currentItem?.content || {}),
+        ...(response.item.content || {})
+      },
+      generation_config: {
+        ...(currentItem?.generation_config || {}),
+        ...(response.item.generation_config || {})
+      },
       last_run_status: response.item.last_run_status,
       last_run_error: response.item.last_run_error,
       last_output: response.item.last_output,

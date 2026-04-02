@@ -118,6 +118,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Delete, Document, Loading, Plus, Top } from '@element-plus/icons-vue'
 import CanvasPromptMentionEditor from '@/components/canvas/CanvasPromptMentionEditor.vue'
 import { useCanvasStudioCommitBoundary } from '@/composables/useCanvasStudioCommitBoundary'
+import { resolveCanvasRichTextHtml } from '@/utils/canvasStageMedia'
 
 const props = defineProps({
   item: { type: Object, default: null },
@@ -213,10 +214,15 @@ const syncEditorHtml = async (html) => {
   if (!editableRef.value) {
     return
   }
-  if (editableRef.value.innerHTML === String(html || '')) {
+  const nextHtml = resolveCanvasRichTextHtml({
+    content: {
+      text: html
+    }
+  })
+  if (editableRef.value.innerHTML === nextHtml) {
     return
   }
-  editableRef.value.innerHTML = String(html || '')
+  editableRef.value.innerHTML = nextHtml
   await nextTick()
 }
 

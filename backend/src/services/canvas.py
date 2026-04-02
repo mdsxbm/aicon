@@ -717,6 +717,9 @@ class CanvasGenerationService(BaseService):
             image_kwargs: Dict[str, Any] = {}
             if api_key.provider.lower() == "custom":
                 options = request.get("options") or {}
+                aspect_ratio = str(options.get("aspect_ratio") or "").strip()
+                if aspect_ratio:
+                    image_kwargs["aspect_ratio"] = aspect_ratio
                 reference_images = self._resolve_image_reference_inputs(
                     options.get("style_reference_image_object_key")
                     or options.get("style_reference_image_url")

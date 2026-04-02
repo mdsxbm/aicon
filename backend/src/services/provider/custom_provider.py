@@ -57,8 +57,15 @@ class CustomProvider(BaseLLMProvider):
 
         # 检查是否是 Gemini 图像模型
         if model and "gemini" in model.lower():
+            gemini_kwargs = dict(kwargs)
+            aspect_ratio = str(gemini_kwargs.pop("aspect_ratio", "") or "").strip()
+            image_size = str(gemini_kwargs.pop("image_size", "") or "").strip()
+            if aspect_ratio:
+                gemini_kwargs["aspectRatio"] = aspect_ratio
+            if image_size:
+                gemini_kwargs["imageSize"] = image_size
             # 调用 Gemini 专用方法，传递所有kwargs
-            gemini_response = await self.generate_image_gemini(prompt,model, **kwargs)
+            gemini_response = await self.generate_image_gemini(prompt, model, **gemini_kwargs)
 
             # 将 Gemini 响应包装成兼容格式
             return self._wrap_gemini_response(gemini_response)

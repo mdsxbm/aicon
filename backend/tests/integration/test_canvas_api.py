@@ -832,6 +832,7 @@ class TestCanvasDocumentApi:
                 "api_key_id": "33333333-3333-3333-3333-333333333333",
                 "model": "veo3.1",
                 "options": {
+                    "aspect_ratio": "9:16",
                     "reference_image_urls": ["uploads/reference-1.jpg"],
                     "reference_text_ids": [],
                 },
@@ -871,6 +872,7 @@ class TestCanvasDocumentApi:
         create_video.assert_awaited_once()
         kwargs = create_video.await_args.kwargs
         assert kwargs["images"] == ["data:image/jpeg;base64,/9j/22Zha2UtanBlZw=="]
+        assert kwargs["aspect_ratio"] == "9:16"
         assert "reference_image_urls" not in kwargs
         assert "reference_text_ids" not in kwargs
 
@@ -913,6 +915,7 @@ class TestCanvasDocumentApi:
                 "api_key_id": "33333333-3333-3333-3333-333333333333",
                 "model": "gpt-image-1",
                 "options": {
+                    "aspect_ratio": "3:4",
                     "reference_image_object_keys": ["uploads/mention-ref.png"],
                     "style_reference_image_object_key": "uploads/style-ref.png",
                 },
@@ -944,6 +947,7 @@ class TestCanvasDocumentApi:
         assert result["result_image_object_key"] == "uploads/generated.png"
         fake_provider.generate_image.assert_awaited_once()
         kwargs = fake_provider.generate_image.await_args.kwargs
+        assert kwargs["aspect_ratio"] == "3:4"
         assert kwargs["reference_images"] == ["uploads/style-ref.png", "uploads/mention-ref.png"]
         assert "style_reference_image_object_key" not in kwargs
         assert "reference_image_object_keys" not in kwargs

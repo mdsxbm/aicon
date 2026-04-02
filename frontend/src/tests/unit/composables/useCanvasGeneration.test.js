@@ -17,19 +17,24 @@ vi.mock('@/services/canvas', () => ({
   }
 }))
 
-const mountComposable = (updateItem) => {
+const mountComposable = (updateItem, getItemById = () => null) => {
   let composable = null
   const root = document.createElement('div')
   const app = createApp(
     defineComponent({
       setup() {
-        composable = useCanvasGeneration(updateItem)
+        composable = useCanvasGeneration(updateItem, getItemById)
         return () => null
       }
     })
   )
   app.mount(root)
-  return { app, get composable() { return composable } }
+  return {
+    app,
+    get composable() {
+      return composable
+    }
+  }
 }
 
 const buildSseResponse = (events) => {
@@ -142,7 +147,9 @@ describe('useCanvasGeneration SSE handling', () => {
       })
     )
 
-    expect(updateItem.mock.calls.some((call) => call[1].last_run_status === 'failed')).toBe(false)
+    expect(
+      updateItem.mock.calls.some((call) => call[1].last_run_status === 'failed')
+    ).toBe(false)
 
     app.unmount()
   })
@@ -203,6 +210,142 @@ describe('useCanvasGeneration SSE handling', () => {
           result_image_url: 'https://cdn.example.com/uploads/generated.png'
         },
         last_run_status: 'completed'
+      })
+    )
+
+    app.unmount()
+  })
+
+  it('applies a selected image history entry and reloads item history', async () => {
+    const updateItem = vi.fn()
+    const { app, composable } = mountComposable(updateItem)
+
+    canvasService.applyGeneration.mockResolvedValue({
+      item: {
+        content: {
+          result_image_object_key: 'history/selected-image.png',
+          result_image_url: 'https://cdn.example.com/history/selected-image.png'
+        },
+        generation_config: { model: 'gpt-image-1' },
+        last_run_status: 'completed',
+        last_run_error: null,
+        last_output: {
+          result_image_object_key: 'history/selected-image.png',
+          result_image_url: 'https://cdn.example.com/history/selected-image.png'
+        }
+      }
+    })
+    canvasService.listGenerations.mockResolvedValue({
+      generations: [
+        {
+          id: 'generation-image-2',
+          result_payload: {
+            result_image_url:
+              'https://cdn.example.com/history/selected-image.png'
+          }
+        }
+      ]
+    })
+
+    const response = await composable.applyGeneration(
+      'item-image-1',
+      'generation-image-2'
+    )
+
+    expect(canvasService.applyGeneration).toHaveBeenCalledWith(
+      'item-image-1',
+      'generation-image-2'
+    )
+    expect(updateItem).toHaveBeenCalledWith(
+      'item-image-1',
+      expect.objectContaining({
+        content: {
+          result_image_object_key: 'history/selected-image.png',
+          result_image_url: 'https://cdn.example.com/history/selected-image.png'
+        },
+        last_run_status: 'completed',
+        last_run_error: null,
+        is_persisted: true
+      })
+    )
+    expect(canvasService.listGenerations).toHaveBeenCalledWith('item-image-1', {
+      page: 1,
+      size: 20
+    })
+    expect(composable.generationHistories['item-image-1']).toEqual([
+      {
+        id: 'generation-image-2',
+        result_payload: {
+          result_image_url: 'https://cdn.example.com/history/selected-image.png'
+        }
+      }
+    ])
+    expect(response).toEqual(
+      expect.objectContaining({
+        item: expect.objectContaining({
+          last_run_status: 'completed'
+        })
+      })
+    )
+
+    app.unmount()
+  })
+
+  it('preserves existing prompt metadata when applying a history entry with partial content', async () => {
+    const updateItem = vi.fn()
+    const currentItem = {
+      id: 'item-image-1',
+      item_type: 'image',
+      content: {
+        prompt: 'white studio desk',
+        promptPlainText: 'white studio desk',
+        promptTokens: [{ type: 'text', text: 'white studio desk' }],
+        style_reference_image_object_key: 'reference/style.png'
+      },
+      generation_config: {
+        model: 'gpt-image-1',
+        api_key_id: 'key-1'
+      }
+    }
+    const { app, composable } = mountComposable(
+      updateItem,
+      (itemId) => (itemId === currentItem.id ? currentItem : null)
+    )
+
+    canvasService.applyGeneration.mockResolvedValue({
+      item: {
+        content: {
+          result_image_object_key: 'history/selected-image.png',
+          result_image_url: 'https://cdn.example.com/history/selected-image.png'
+        },
+        generation_config: { model: 'gpt-image-1' },
+        last_run_status: 'completed',
+        last_run_error: null,
+        last_output: {
+          result_image_object_key: 'history/selected-image.png',
+          result_image_url: 'https://cdn.example.com/history/selected-image.png'
+        }
+      }
+    })
+    canvasService.listGenerations.mockResolvedValue({ generations: [] })
+
+    await composable.applyGeneration('item-image-1', 'generation-image-2')
+
+    expect(updateItem).toHaveBeenCalledWith(
+      'item-image-1',
+      expect.objectContaining({
+        content: {
+          prompt: 'white studio desk',
+          promptPlainText: 'white studio desk',
+          promptTokens: [{ type: 'text', text: 'white studio desk' }],
+          style_reference_image_object_key: 'reference/style.png',
+          result_image_object_key: 'history/selected-image.png',
+          result_image_url: 'https://cdn.example.com/history/selected-image.png'
+        },
+        generation_config: {
+          model: 'gpt-image-1',
+          api_key_id: 'key-1'
+        }
       })
     )
 
