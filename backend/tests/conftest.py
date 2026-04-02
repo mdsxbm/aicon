@@ -410,5 +410,5 @@ def setup_mocks(monkeypatch):
 
     try:
         monkeypatch.setattr("src.tasks.file_processing.celery_app", AsyncMock())
-    except AttributeError:
+    except (AttributeError, ImportError):
         pass

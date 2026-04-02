@@ -2,6 +2,7 @@
 API密钥服务层 - 处理API密钥的业务逻辑
 """
 
+import uuid
 from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, status
@@ -42,7 +43,7 @@ class APIKeyService(BaseService):
 
         # 创建API密钥对象
         new_key = APIKey(
-            user_id=user_id,
+            user_id=_normalize_uuid(user_id),
             name=name,
             provider=provider.lower(),
             base_url=base_url,
@@ -83,7 +84,7 @@ class APIKeyService(BaseService):
         """
 
         # 构建查询条件
-        conditions = [APIKey.user_id == user_id]
+        conditions = [APIKey.user_id == _normalize_uuid(user_id)]
 
         if provider:
             conditions.append(APIKey.provider == provider.lower())
@@ -126,10 +127,14 @@ class APIKeyService(BaseService):
             HTTPException: 密钥不存在或无权访问
         """
         if user_id:
-            api_key = await APIKey.get_by_id_and_user(self.db_session, key_id, user_id)
+            api_key = await APIKey.get_by_id_and_user(
+                self.db_session,
+                _normalize_uuid(key_id),
+                _normalize_uuid(user_id),
+            )
         else:
             # 不过滤用户，直接通过ID查询
-            stmt = select(APIKey).where(APIKey.id == key_id)
+            stmt = select(APIKey).where(APIKey.id == _normalize_uuid(key_id))
             result = await self.db_session.execute(stmt)
             api_key = result.scalar_one_or_none()
 
@@ -366,3 +371,9 @@ class APIKeyService(BaseService):
 __all__ = [
     "APIKeyService",
 ]
+
+
+def _normalize_uuid(value):
+    if isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))

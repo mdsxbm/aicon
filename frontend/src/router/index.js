@@ -16,6 +16,8 @@ const GenerationSettings = () => import('@/views/GenerationSettings.vue')
 const Publish = () => import('@/views/Publish.vue')
 const APIKeys = () => import('@/views/APIKeys.vue')
 const Settings = () => import('@/views/Settings.vue')
+const CanvasList = () => import('@/views/canvas/CanvasList.vue')
+const CanvasEditor = () => import('@/views/canvas/CanvasEditor.vue')
 
 const routes = [
   {
@@ -104,6 +106,25 @@ const routes = [
         name: 'MovieStudio',
         component: () => import('@/views/studio/MovieStudio.vue'),
         meta: { title: '电影工作室' },
+        props: true
+      }
+    ]
+  },
+  {
+    path: '/canvas',
+    name: 'Canvas',
+    component: MainLayout,
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'CanvasList',
+        component: CanvasList
+      },
+      {
+        path: ':canvasId',
+        name: 'CanvasEditor',
+        component: CanvasEditor,
         props: true
       }
     ]

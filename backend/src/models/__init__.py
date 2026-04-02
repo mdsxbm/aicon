@@ -5,6 +5,15 @@
 from src.models.api_key import APIKey, APIKeyProvider, APIKeyStatus
 from src.models.base import Base, BaseModel
 from src.models.bgm import BGM, BGMStatus
+from src.models.canvas import (
+    CanvasConnection,
+    CanvasDocument,
+    CanvasGenerationType,
+    CanvasItem,
+    CanvasItemGeneration,
+    CanvasItemType,
+    CanvasRunStatus,
+)
 from src.models.chapter import Chapter, ChapterStatus
 from src.models.paragraph import Paragraph, ParagraphAction
 from src.models.project import Project, ProjectStatus
@@ -33,6 +42,13 @@ __all__ = [
     "VideoTaskStatus",
     "BGM",
     "BGMStatus",
+    "CanvasDocument",
+    "CanvasItem",
+    "CanvasConnection",
+    "CanvasItemGeneration",
+    "CanvasItemType",
+    "CanvasRunStatus",
+    "CanvasGenerationType",
     "PublishTask",
     "PublishStatus",
     "PublishPlatform",

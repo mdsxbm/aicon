@@ -84,7 +84,8 @@ import {
   Promotion,
   Setting,
   Key,
-  Headset
+  Headset,
+  Share
 } from '@element-plus/icons-vue'
 
 // Props
@@ -116,6 +117,12 @@ const menuItems = [
     title: '项目管理',
     path: '/projects',
     icon: Folder,
+    badge: null
+  },
+  {
+    title: 'Canvas',
+    path: '/canvas',
+    icon: Share,
     badge: null
   },
   {

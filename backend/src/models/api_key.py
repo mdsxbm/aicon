@@ -2,6 +2,7 @@
 API密钥数据模型 - 按照migration文件实现
 """
 
+import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Optional
@@ -64,11 +65,7 @@ class APIKey(BaseModel):
 
     # 索引定义
     __table_args__ = (
-        Index('ix_api_keys_user_id', 'user_id'),
-        Index('ix_api_keys_provider', 'provider'),
-        Index('ix_api_keys_status', 'status'),
-        Index('ix_api_keys_created_at', 'created_at'),
-        {'comment': 'API密钥表 - 存储用户配置的AI服务API密钥'}
+        {'comment': 'API密钥表 - 存储用户配置的AI服务API密钥'},
     )
 
     def set_api_key(self, plain_key: str) -> None:
@@ -155,7 +152,7 @@ class APIKey(BaseModel):
         from sqlalchemy import select
 
         result = await db_session.execute(
-            select(cls).filter(cls.user_id == user_id).order_by(cls.created_at.desc())
+            select(cls).filter(cls.user_id == _normalize_uuid(user_id)).order_by(cls.created_at.desc())
         )
         return result.scalars().all()
 
@@ -176,8 +173,8 @@ class APIKey(BaseModel):
 
         result = await db_session.execute(
             select(cls).filter(
-                cls.id == key_id,
-                cls.user_id == user_id
+                cls.id == _normalize_uuid(key_id),
+                cls.user_id == _normalize_uuid(user_id)
             )
         )
         return result.scalar_one_or_none()
@@ -199,7 +196,7 @@ class APIKey(BaseModel):
 
         result = await db_session.execute(
             select(cls).filter(
-                cls.user_id == user_id,
+                cls.user_id == _normalize_uuid(user_id),
                 cls.provider == provider,
                 cls.status == APIKeyStatus.ACTIVE
             ).order_by(cls.created_at.desc())
@@ -233,3 +230,9 @@ __all__ = [
     "APIKeyStatus",
     "APIKeyProvider",
 ]
+
+
+def _normalize_uuid(value):
+    if isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))

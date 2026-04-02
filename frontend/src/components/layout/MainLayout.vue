@@ -118,7 +118,7 @@ import { ref, computed, watch, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
-import { User, Setting, SwitchButton, ArrowDown, House, Folder, Document } from '@element-plus/icons-vue'
+import { User, Setting, SwitchButton, ArrowDown, House, Folder, Document, Share } from '@element-plus/icons-vue'
 import AppSidebar from './AppSidebar.vue'
 
 const router = useRouter()
@@ -147,6 +147,7 @@ const breadcrumbs = computed(() => {
   const routeMap = {
     '/dashboard': { title: '控制台', icon: House },
     '/projects': { title: '项目管理', icon: Folder },
+    '/canvas': { title: 'Canvas', icon: Share },
     '/generation': { title: '视频生成', icon: Document },
     '/publish': { title: '内容发布', icon: Document },
     '/settings': { title: '系统设置', icon: Setting }

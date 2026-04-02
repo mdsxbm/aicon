@@ -2,6 +2,7 @@
 API依赖注入 - 仅保留实际使用的功能
 """
 
+import uuid
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -30,7 +31,7 @@ async def get_current_user_optional(
 
     try:
         payload = verify_token(token)
-        user_id: str = payload.get("sub")
+        user_id = _parse_user_id(payload.get("sub"))
         if user_id is None:
             return None
 
@@ -63,7 +64,7 @@ async def get_current_user_required(
 
     try:
         payload = verify_token(token)
-        user_id: str = payload.get("sub")
+        user_id = _parse_user_id(payload.get("sub"))
         if user_id is None:
             raise credentials_exception
     except TokenError:
@@ -83,6 +84,17 @@ async def get_current_user_required(
         )
 
     return user
+
+
+def _parse_user_id(raw_user_id: Optional[str]) -> Optional[uuid.UUID]:
+    """Normalize JWT subject values into UUID objects expected by the ORM."""
+    if not raw_user_id:
+        return None
+
+    try:
+        return uuid.UUID(str(raw_user_id))
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 __all__ = [

@@ -15,6 +15,7 @@ celery_app = Celery(
     include=[
         "src.tasks.project",
         "src.tasks.generate",
+        "src.tasks.canvas",
         "src.tasks.movie",
         "src.tasks.movie_composition",  # 电影合成任务
         "src.tasks.bilibili_task"
