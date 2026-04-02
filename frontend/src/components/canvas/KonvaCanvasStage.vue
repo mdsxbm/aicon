@@ -59,6 +59,15 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CanvasGeneratingOverlay from '@/components/canvas/CanvasGeneratingOverlay.vue'
+import { resolveCanvasImageNodeSize } from '@/utils/canvasImageNodeLayout'
+import { resolveCanvasVideoNodeSize } from '@/utils/canvasVideoNodeLayout'
+import {
+  releaseCanvasStageVideoEntry,
+  resolveCanvasStageGeneratingMeta,
+  resolveCanvasStageMediaUrl,
+  resolveCanvasStagePreviewText,
+  resolveStageVideoPreviewTargets
+} from '@/utils/canvasStageMedia'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -74,6 +83,7 @@ const emit = defineEmits([
   'item-dblclick',
   'item-drag-end',
   'item-handle-pointerdown',
+  'item-resize-suggest',
   'stage-click',
   'viewport-change',
   'selection-box-end'
@@ -92,28 +102,27 @@ const suppressStageClick = ref(false)
 
 let resizeObserver = null
 
-const resolveGeneratingMeta = (item) => {
-  if (item.last_run_status === 'pending' || item.last_run_status === 'processing') {
-    return {
-      label: item.item_type === 'video' ? 'AI 正在生成视频' : item.item_type === 'image' ? 'AI 正在生成图像' : 'AI 正在生成文本',
-      hint: item.item_type === 'video' ? '预计 2 至 10 分钟' : item.item_type === 'image' ? '预计 30 秒至 2 分钟' : '预计数秒完成'
-    }
-  }
-  return null
-}
-
-const resolvePreviewText = (item) => {
-  if (item.item_type === 'text') {
-    return String(item.content?.text || '').slice(0, 180) || '输入正文或通过提示词生成文本'
-  }
+const resolveCanvasItemWidth = (item) => {
   if (item.item_type === 'image') {
-    return String(item.content?.prompt || '').slice(0, 120) || '输入提示词或上传参考图'
+    return resolveCanvasImageNodeSize(item, loadedImageMap.value[item.id]?.image).width
   }
-  return String(item.content?.prompt || '').slice(0, 120) || '输入提示词并连接上游参考节点'
+  if (item.item_type === 'video') {
+    return resolveCanvasVideoNodeSize(item, loadedVideoMap.value[item.id]?.video).width
+  }
+  const width = Number(item.width || 0)
+  return Math.min(Math.max(width || 340, 320), 420)
 }
 
-const resolveCanvasItemWidth = (item) => Number(item.width || (item.item_type === 'text' ? 320 : item.item_type === 'image' ? 340 : 360))
-const resolveCanvasItemHeight = (item) => Number(item.height || (item.item_type === 'text' ? 220 : item.item_type === 'image' ? 280 : 300))
+const resolveCanvasItemHeight = (item) => {
+  if (item.item_type === 'image') {
+    return resolveCanvasImageNodeSize(item, loadedImageMap.value[item.id]?.image).height
+  }
+  if (item.item_type === 'video') {
+    return resolveCanvasVideoNodeSize(item, loadedVideoMap.value[item.id]?.video).height
+  }
+  const height = Number(item.height || 0)
+  return Math.min(Math.max(height || 220, 180), 280)
+}
 
 const normalizedItems = computed(() =>
   props.items.map((item) => ({
@@ -132,12 +141,14 @@ const itemLookup = computed(() =>
   }, {})
 )
 
-const renderedItems = computed(() => normalizedItems.value)
+const renderedItems = computed(() =>
+  normalizedItems.value.filter((item) => String(item.id || '') !== String(props.editingItemId || ''))
+)
 
 const generatingOverlayItems = computed(() =>
   renderedItems.value
     .map((item) => {
-      const generatingMeta = resolveGeneratingMeta(item)
+      const generatingMeta = resolveCanvasStageGeneratingMeta(item)
       if (!generatingMeta) {
         return null
       }
@@ -256,7 +267,7 @@ const buildItemMediaConfig = (item) => {
 }
 
 const buildItemTitleConfig = (item) => ({
-  x: item.item_type === 'text' ? 16 : 20,
+  x: item.item_type === 'text' ? 18 : 20,
   y: item.item_type === 'text' ? 16 : 18,
   width: item.width - (item.item_type === 'text' ? 32 : 40),
   text: item.title || fallbackTitle(item.item_type),
@@ -273,7 +284,7 @@ const buildItemPreviewConfig = (item) => ({
   y: item.item_type === 'text' ? 46 : 52,
   width: item.width - (item.item_type === 'text' ? 32 : 40),
   height: Math.max(item.height - (item.item_type === 'text' ? 62 : 84), 24),
-  text: resolvePreviewText(item),
+  text: resolveCanvasStagePreviewText(item),
   fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
   fill: item.item_type === 'text' ? '#52607a' : '#42526b',
   fontSize: item.item_type === 'text' ? 12 : 13,
@@ -329,7 +340,7 @@ const resolveItemGradient = (itemType) => {
   return [0, '#ffffff', 1, '#f8fafc']
 }
 
-const fallbackTitle = (itemType) => itemType === 'text' ? 'Text' : itemType === 'image' ? 'Image' : 'Video'
+const fallbackTitle = (itemType) => itemType === 'text' ? '文本节点' : itemType === 'image' ? '图片节点' : '视频节点'
 const pickItemStroke = (itemType) => itemType === 'image' ? 'rgba(75, 120, 255, 0.18)' : itemType === 'video' ? 'rgba(114, 90, 255, 0.16)' : 'rgba(34, 57, 98, 0.12)'
 
 const resolveHandlePoint = (item, handle, role) => {
@@ -482,10 +493,26 @@ const marqueeOverlayStyle = computed(() => {
   }
 })
 
+const maybeEmitResizeSuggestion = (itemId, nextWidth, nextHeight) => {
+  const item = props.items.find((entry) => entry.id === itemId)
+  if (!item) {
+    return
+  }
+  const width = Math.round(Number(nextWidth || 0))
+  const height = Math.round(Number(nextHeight || 0))
+  if (!width || !height) {
+    return
+  }
+  if (Math.abs(Number(item.width || 0) - width) < 2 && Math.abs(Number(item.height || 0) - height) < 2) {
+    return
+  }
+  emit('item-resize-suggest', { id: itemId, width, height })
+}
+
 const syncLoadedImages = () => {
   const nextMap = { ...loadedImageMap.value }
   props.items.filter((item) => item?.item_type === 'image').forEach((item) => {
-    const imageUrl = String(item?.content?.result_image_url || item?.content?.reference_image_url || '').trim()
+    const imageUrl = resolveCanvasStageMediaUrl(item)
     const currentEntry = nextMap[item.id]
     if (!imageUrl) {
       delete nextMap[item.id]
@@ -497,7 +524,9 @@ const syncLoadedImages = () => {
     const img = new window.Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
+      const resolvedSize = resolveCanvasImageNodeSize(item, img)
       loadedImageMap.value = { ...loadedImageMap.value, [item.id]: { url: imageUrl, image: img } }
+      maybeEmitResizeSuggestion(item.id, resolvedSize.width, resolvedSize.height)
     }
     img.onerror = () => {
       loadedImageMap.value = { ...loadedImageMap.value, [item.id]: { url: imageUrl, image: null } }
@@ -508,19 +537,16 @@ const syncLoadedImages = () => {
 }
 
 const releaseLoadedVideoEntryById = (itemId, nextMap = loadedVideoMap.value) => {
-  const currentEntry = nextMap[itemId]
-  if (!currentEntry?.video) {
-    return
-  }
-  currentEntry.video.pause?.()
-  currentEntry.video.src = ''
-  currentEntry.video.load?.()
+  releaseCanvasStageVideoEntry(nextMap[itemId])
 }
 
 const syncLoadedVideos = () => {
   const nextMap = { ...loadedVideoMap.value }
-  props.items.filter((item) => item?.item_type === 'video').forEach((item) => {
-    const previewUrl = String(item?.content?.result_video_url || '').trim()
+  resolveStageVideoPreviewTargets({
+    items: props.items,
+    editingItemId: props.editingItemId
+  }).forEach((item) => {
+    const previewUrl = resolveCanvasStageMediaUrl(item)
     const currentEntry = nextMap[item.id]
     if (!previewUrl) {
       releaseLoadedVideoEntryById(item.id, nextMap)
@@ -541,7 +567,9 @@ const syncLoadedVideos = () => {
         return
       }
       resolved = true
+      const resolvedSize = resolveCanvasVideoNodeSize(item, video)
       loadedVideoMap.value = { ...loadedVideoMap.value, [item.id]: { url: previewUrl, video } }
+      maybeEmitResizeSuggestion(item.id, resolvedSize.width, resolvedSize.height)
       stageRef.value?.getNode()?.batchDraw?.()
     }
     video.onloadeddata = () => {

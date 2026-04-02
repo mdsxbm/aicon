@@ -22,8 +22,8 @@
       </button>
     </div>
 
-    <div class="image-preview-card">
-      <img v-if="draft.resultImageUrl || draft.referenceImageUrl" :src="draft.resultImageUrl || draft.referenceImageUrl" class="preview-image" alt="canvas preview" />
+    <div class="image-preview-card" @click="handlePreviewClick">
+      <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="canvas preview" />
       <div v-else class="empty-preview">输入提示词或上传参考图</div>
       <CanvasGeneratingOverlay :visible="generating" label="AI 正在生成图像" hint="预计 30 秒至 2 分钟" />
     </div>
@@ -99,6 +99,10 @@
         <el-icon><Delete /></el-icon>
       </button>
     </div>
+
+    <el-dialog v-model="previewDialogVisible" width="min(96vw, 1080px)" append-to-body class="canvas-preview-dialog">
+      <img v-if="previewUrl" :src="previewUrl" class="dialog-preview-image" alt="canvas full preview" />
+    </el-dialog>
   </div>
 </template>
 
@@ -126,7 +130,9 @@ const emit = defineEmits(['commit', 'delete', 'focus-item', 'generate', 'handle-
 const promptEditorRef = ref(null)
 const rootRef = ref(null)
 const fileInputRef = ref(null)
+const previewDialogVisible = ref(false)
 const canSubmitPrompt = computed(() => String(props.draft.promptPlainText || '').trim().length > 0)
+const previewUrl = computed(() => props.draft.resultImageUrl || props.draft.referenceImageUrl || '')
 
 const { handleRootPointerDown, handleRootFocusIn } = useCanvasStudioCommitBoundary(rootRef, () => {
   promptEditorRef.value?.flushTokens?.()
@@ -144,6 +150,13 @@ const handleFileChange = (event) => {
     emit('upload', file)
   }
   event.target.value = ''
+}
+
+const handlePreviewClick = () => {
+  if (!previewUrl.value) {
+    return
+  }
+  previewDialogVisible.value = true
 }
 </script>
 
@@ -168,7 +181,7 @@ const handleFileChange = (event) => {
 
 .floating-header {
   position: absolute;
-  top: -48px;
+  top: var(--studio-header-top, -48px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -270,12 +283,16 @@ const handleFileChange = (event) => {
 
 .studio-docked-panel {
   position: absolute;
-  top: calc(100% + 22px);
+  top: var(--studio-panel-top, calc(100% + 22px));
+  bottom: var(--studio-panel-bottom, auto);
   left: 50%;
-  transform: translateX(-50%);
-  width: min(620px, calc(100% + 120px));
+  transform: translateX(calc(-50% + var(--studio-panel-offset-x, 0px)));
+  width: min(var(--studio-panel-max-width, 620px), calc(100vw - 64px));
+  max-width: calc(100vw - 64px);
   border-radius: 20px;
   padding: 14px 16px;
+  max-height: min(360px, calc(100vh - 48px));
+  overflow: visible;
 }
 
 .panel-toolbar,
@@ -289,6 +306,7 @@ const handleFileChange = (event) => {
 .panel-toolbar {
   margin-top: 14px;
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .tool-select {
@@ -328,5 +346,12 @@ const handleFileChange = (event) => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.dialog-preview-image {
+  display: block;
+  width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
 }
 </style>

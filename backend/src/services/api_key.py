@@ -334,14 +334,11 @@ class APIKeyService(BaseService):
                 return ['gpt-4o-mini-tts', 'tts-1']
             elif model_type == "video":
                 return [
-                    'veo_3_1',
-                    'veo_3_1-4K',
-                    'veo_3_1-components',
-                    'veo_3_1-components-4K',
-                    'veo_3_1-fast',
-                    'veo_3_1-fast-4K',
-                    'veo_3_1-fast-components',
-                    'veo_3_1-fast-components-4K'
+                    'veo3.1',
+                    'veo3.1-components',
+                    'veo3.1-fast',
+                    'veo3.1-4k',
+                    'veo3.1-components-4k'
                 ]
             else:  # text
                 return ['gemini-3.1-pro-preview','gemini-3-pro-preview','gemini-3-flash-preview', 'gpt-4o', 'gpt-4o-mini']

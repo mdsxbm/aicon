@@ -11,6 +11,7 @@
         @item-click="handleItemClick"
         @item-drag-end="handleItemDragEnd"
         @item-handle-pointerdown="handleStageHandlePointerDown"
+        @item-resize-suggest="handleItemResizeSuggest"
         @stage-click="handleStageClick"
         @viewport-change="handleViewportChange"
         @selection-box-end="handleSelectionBoxEnd"
@@ -205,6 +206,23 @@ const selectedItemStyle = computed(() => {
   if (!selectedItem.value) {
     return null
   }
+  const shellRect = stageShellRef.value?.getBoundingClientRect()
+  const screenLeft = selectedItem.value.position_x * zoom.value + pan.value.x
+  const screenTop = selectedItem.value.position_y * zoom.value + pan.value.y
+  const screenWidth = selectedItem.value.width * zoom.value
+  const screenHeight = selectedItem.value.height * zoom.value
+  const panelWidth = selectedItem.value.item_type === 'text' ? 560 : 620
+  const spaceBelow = shellRect ? shellRect.height - (screenTop + screenHeight) - 20 : 0
+  const estimatedPanelHeight = selectedItem.value.item_type === 'text' ? 220 : 268
+  const shouldPlacePanelAbove = shellRect ? (spaceBelow < estimatedPanelHeight && screenTop > estimatedPanelHeight + 32) : false
+  const headerNeedsInset = shellRect ? screenTop < 64 : false
+  let panelOffsetX = 0
+  if (shellRect) {
+    const safeWidth = Math.min(panelWidth, shellRect.width - 32)
+    const centeredLeft = screenLeft + screenWidth / 2 - safeWidth / 2
+    const clampedLeft = Math.min(Math.max(centeredLeft, 16), Math.max(16, shellRect.width - safeWidth - 16))
+    panelOffsetX = clampedLeft - centeredLeft
+  }
   return {
     position: 'absolute',
     left: '0',
@@ -212,7 +230,12 @@ const selectedItemStyle = computed(() => {
     width: `${selectedItem.value.width * zoom.value}px`,
     height: `${selectedItem.value.height * zoom.value}px`,
     transform: `translate(${selectedItem.value.position_x * zoom.value + pan.value.x}px, ${selectedItem.value.position_y * zoom.value + pan.value.y}px)`,
-    transformOrigin: 'top left'
+    transformOrigin: 'top left',
+    '--studio-panel-top': shouldPlacePanelAbove ? 'auto' : 'calc(100% + 22px)',
+    '--studio-panel-bottom': shouldPlacePanelAbove ? 'calc(100% + 18px)' : 'auto',
+    '--studio-panel-offset-x': `${panelOffsetX}px`,
+    '--studio-panel-max-width': `${Math.max(320, Math.min(panelWidth, (shellRect?.width || panelWidth) - 32))}px`,
+    '--studio-header-top': headerNeedsInset ? '12px' : '-48px'
   }
 })
 
@@ -661,6 +684,17 @@ const handleConnectionClick = (connection) => {
 
 const handleItemDragEnd = ({ id, positionX, positionY }) => {
   updateItem(id, { position_x: positionX, position_y: positionY })
+}
+
+const handleItemResizeSuggest = ({ id, width, height }) => {
+  const item = items.value.find((entry) => entry.id === id)
+  if (!item) {
+    return
+  }
+  if (Math.abs(Number(item.width || 0) - Number(width || 0)) < 2 && Math.abs(Number(item.height || 0) - Number(height || 0)) < 2) {
+    return
+  }
+  updateItem(id, { width, height })
 }
 
 const handleViewportChange = ({ x, y, scale, width, height }) => {

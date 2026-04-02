@@ -1,3 +1,4 @@
+import inspect
 from typing import Union
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
@@ -34,11 +35,33 @@ from src.models.user import User
 from src.services.api_key import APIKeyService
 from src.services.canvas import CanvasGenerationService, CanvasService
 from src.tasks.canvas import generate_canvas_image, generate_canvas_text, generate_canvas_video
+from src.utils.storage import get_storage_client
 
 router = APIRouter()
 
 
-def build_item_payload(item) -> CanvasItemPayload:
+async def resolve_canvas_media_fields(payload: dict) -> dict:
+    content = dict(payload or {})
+    storage_client = get_storage_client()
+    if inspect.isawaitable(storage_client):
+        storage_client = await storage_client
+
+    image_object_key = str(content.get("result_image_object_key") or "").strip()
+    if image_object_key:
+        content["result_image_url"] = storage_client.get_presigned_url(image_object_key)
+
+    reference_image_object_key = str(content.get("reference_image_object_key") or "").strip()
+    if reference_image_object_key:
+        content["reference_image_url"] = storage_client.get_presigned_url(reference_image_object_key)
+
+    video_object_key = str(content.get("result_video_object_key") or "").strip()
+    if video_object_key:
+        content["result_video_url"] = storage_client.get_presigned_url(video_object_key)
+
+    return content
+
+
+async def build_item_payload(item) -> CanvasItemPayload:
     item_id = item["id"] if isinstance(item, dict) else item.id
     item_type = item["item_type"] if isinstance(item, dict) else item.item_type
     title = item.get("title", "") if isinstance(item, dict) else (item.title or "")
@@ -61,12 +84,25 @@ def build_item_payload(item) -> CanvasItemPayload:
         width=width,
         height=height,
         z_index=z_index,
-        content=content,
+        content=await resolve_canvas_media_fields(content),
         generation_config=generation_config,
         last_run_status=last_run_status,
         last_run_error=last_run_error,
-        last_output=last_output,
+        last_output=await resolve_canvas_media_fields(last_output),
     )
+
+
+async def build_generation_response(generation) -> CanvasGenerationResponse:
+    if isinstance(generation, dict):
+        data = dict(generation)
+    else:
+        data = {
+            **generation.to_dict(),
+            "request_payload": generation.request_payload_json,
+            "result_payload": generation.result_payload_json,
+        }
+    data["result_payload"] = await resolve_canvas_media_fields(data.get("result_payload") or {})
+    return CanvasGenerationResponse.from_dict(data)
 
 
 def dispatch_canvas_text_generation(generation_id: str) -> str:
@@ -160,7 +196,7 @@ async def get_canvas_document(
                 id=snapshot["document"].id,
                 title=snapshot["document"].title,
             ),
-            items=[build_item_payload(item) for item in snapshot["items"]],
+            items=[await build_item_payload(item) for item in snapshot["items"]],
             connections=[
                 CanvasConnectionPayload(
                     id=connection.id,
@@ -210,7 +246,7 @@ async def create_canvas_item(
     service = CanvasService(db)
     item = await service.create_item(document_id, str(current_user.id), payload.model_dump())
     await db.commit()
-    return build_item_payload(item)
+    return await build_item_payload(item)
 
 
 @router.get("/canvas-documents/{document_id}/items/{item_id}", response_model=CanvasItemPayload)
@@ -223,7 +259,7 @@ async def get_canvas_item(
     service = CanvasService(db)
     await service.get_document(document_id, str(current_user.id))
     item = await service.get_item(item_id, str(current_user.id))
-    return build_item_payload(item)
+    return await build_item_payload(item)
 
 
 @router.patch("/canvas-documents/{document_id}/items/{item_id}", response_model=CanvasItemPayload)
@@ -237,7 +273,7 @@ async def update_canvas_item(
     service = CanvasService(db)
     item = await service.update_item(document_id, item_id, str(current_user.id), payload.model_dump(exclude_none=True))
     await db.commit()
-    return build_item_payload(item)
+    return await build_item_payload(item)
 
 
 @router.delete("/canvas-documents/{document_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -261,7 +297,7 @@ async def get_canvas_item_previews(
 ):
     service = CanvasService(db)
     items = await service.get_item_previews(document_id, str(current_user.id), [str(item_id) for item_id in payload.item_ids])
-    return CanvasPreviewItemsResponse(items=[build_item_payload(item) for item in items])
+    return CanvasPreviewItemsResponse(items=[await build_item_payload(item) for item in items])
 
 
 @router.post("/canvas-documents/{document_id}/connections", response_model=CanvasConnectionPayload, status_code=status.HTTP_201_CREATED)
@@ -305,7 +341,7 @@ async def get_canvas_graph(
     graph = await service.get_graph(document_id, str(current_user.id))
     return CanvasGraphResponse(
         document=CanvasDocumentResponse.from_dict(graph["document"].to_dict()),
-        items=[build_item_payload(item) for item in graph["items"]],
+        items=[await build_item_payload(item) for item in graph["items"]],
         connections=[
             {
                 "id": connection.id,
@@ -337,7 +373,7 @@ async def save_canvas_graph(
     graph = await service.get_graph(document_id, str(current_user.id))
     return CanvasGraphResponse(
         document=CanvasDocumentResponse.from_dict(graph["document"].to_dict()),
-        items=[build_item_payload(item) for item in graph["items"]],
+        items=[await build_item_payload(item) for item in graph["items"]],
         connections=[
             {
                 "id": connection.id,
@@ -369,14 +405,8 @@ async def generate_text_for_canvas_item(
         message="文本生成任务已提交",
         generation_id=generation.id,
         status="pending",
-        item=build_item_payload(item),
-        generation=CanvasGenerationResponse.from_dict(
-            {
-                **generation.to_dict(),
-                "request_payload": generation.request_payload_json,
-                "result_payload": generation.result_payload_json,
-            }
-        ),
+        item=await build_item_payload(item),
+        generation=await build_generation_response(generation),
     )
 
 
@@ -422,14 +452,8 @@ async def generate_image_for_canvas_item(
         message="图片生成任务已提交",
         generation_id=generation.id,
         status="pending",
-        item=build_item_payload(item),
-        generation=CanvasGenerationResponse.from_dict(
-            {
-                **generation.to_dict(),
-                "request_payload": generation.request_payload_json,
-                "result_payload": generation.result_payload_json,
-            }
-        ),
+        item=await build_item_payload(item),
+        generation=await build_generation_response(generation),
     )
 
 
@@ -441,13 +465,14 @@ async def stream_generate_image_for_canvas_item(
     db: AsyncSession = Depends(get_db),
 ):
     service = CanvasGenerationService(db)
-
-    async def event_stream():
-        async for chunk in service.stream_image_generation(item_id, str(current_user.id), payload.model_dump(exclude_none=True)):
-            yield chunk
+    _, generation = await service.prepare_image_generation(item_id, str(current_user.id), payload.model_dump(exclude_none=True))
+    await db.commit()
+    task_id = dispatch_canvas_image_generation(str(generation.id))
+    _, generation = await service.attach_task(str(generation.id), task_id)
+    await db.commit()
 
     return StreamingResponse(
-        event_stream(),
+        service.stream_generation_events(str(generation.id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -475,14 +500,8 @@ async def generate_video_for_canvas_item(
         message="视频生成任务已提交",
         generation_id=generation.id,
         status="pending",
-        item=build_item_payload(item),
-        generation=CanvasGenerationResponse.from_dict(
-            {
-                **generation.to_dict(),
-                "request_payload": generation.request_payload_json,
-                "result_payload": generation.result_payload_json,
-            }
-        ),
+        item=await build_item_payload(item),
+        generation=await build_generation_response(generation),
     )
 
 
@@ -494,13 +513,14 @@ async def stream_generate_video_for_canvas_item(
     db: AsyncSession = Depends(get_db),
 ):
     service = CanvasGenerationService(db)
-
-    async def event_stream():
-        async for chunk in service.stream_video_generation(item_id, str(current_user.id), payload.model_dump(exclude_none=True)):
-            yield chunk
+    _, generation = await service.prepare_video_generation(item_id, str(current_user.id), payload.model_dump(exclude_none=True))
+    await db.commit()
+    task_id = dispatch_canvas_video_generation(str(generation.id))
+    _, generation = await service.attach_task(str(generation.id), task_id)
+    await db.commit()
 
     return StreamingResponse(
-        event_stream(),
+        service.stream_generation_events(str(generation.id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -521,16 +541,7 @@ async def list_canvas_item_generations(
     service = CanvasService(db)
     generations, total = await service.list_generations(item_id, str(current_user.id), page, size)
     return CanvasGenerationListResponse(
-        generations=[
-            CanvasGenerationResponse.from_dict(
-                {
-                    **generation.to_dict(),
-                    "request_payload": generation.request_payload_json,
-                    "result_payload": generation.result_payload_json,
-                }
-            )
-            for generation in generations
-        ],
+        generations=[await build_generation_response(generation) for generation in generations],
         total=total,
         page=page,
         size=size,
@@ -551,14 +562,8 @@ async def apply_canvas_generation(
     return CanvasApplyGenerationResponse(
         success=True,
         message="已应用历史结果",
-        item=build_item_payload(item),
-        generation=CanvasGenerationResponse.from_dict(
-            {
-                **generation.to_dict(),
-                "request_payload": generation.request_payload_json,
-                "result_payload": generation.result_payload_json,
-            }
-        ),
+        item=await build_item_payload(item),
+        generation=await build_generation_response(generation),
     )
 
 
@@ -572,14 +577,17 @@ async def get_canvas_video_task(
 ):
     service = CanvasGenerationService(db)
     result = await service.get_video_task_status(document_id, item_id, task_id, str(current_user.id))
+    resolved_video = await resolve_canvas_media_fields(
+        {"result_video_object_key": result.get("result_video_object_key")}
+    )
     return CanvasVideoTaskResponse(
         task_id=result["task_id"],
         provider_task_id=result.get("provider_task_id"),
         status=result["status"],
-        result_video_url=result.get("result_video_url"),
+        result_video_url=resolved_video.get("result_video_url"),
         error_message=result.get("error_message"),
         provider_payload=result.get("provider_payload") or {},
-        item=build_item_payload(result["item"]),
+        item=await build_item_payload(result["item"]),
     )
 
 
@@ -598,6 +606,6 @@ async def upload_canvas_video(
         success=True,
         message="视频已上传到画布节点",
         status="completed",
-        item=build_item_payload(result["item"]),
+        item=await build_item_payload(result["item"]),
         storage_info=result["storage_info"],
     )

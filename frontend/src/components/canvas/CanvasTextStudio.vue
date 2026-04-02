@@ -32,13 +32,15 @@
     </div>
 
     <div class="editor-glass-card">
-      <textarea
-        :value="draft.text"
+      <div
+        ref="editableRef"
         class="rich-textarea"
-        :placeholder="'输入正文内容...'"
-        :disabled="generating"
-        @input="$emit('update:text', $event.target.value)"
-      ></textarea>
+        :class="{ 'is-empty': !draft.text }"
+        :contenteditable="!generating"
+        data-placeholder="输入正文内容..."
+        @input="handleEditorInput"
+        @blur="handleEditorBlur"
+      ></div>
     </div>
 
     <div class="studio-docked-panel">
@@ -108,7 +110,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { Delete, Document, Loading, Plus, Top } from '@element-plus/icons-vue'
 import CanvasPromptMentionEditor from '@/components/canvas/CanvasPromptMentionEditor.vue'
 import { useCanvasStudioCommitBoundary } from '@/composables/useCanvasStudioCommitBoundary'
@@ -129,6 +131,7 @@ const emit = defineEmits(['delete', 'focus-item', 'handle-drag', 'submit-generat
 
 const promptEditorRef = ref(null)
 const rootRef = ref(null)
+const editableRef = ref(null)
 const canSubmitPrompt = computed(() => String(props.draft.promptPlainText || '').trim().length > 0)
 
 const { handleRootPointerDown, handleRootFocusIn } = useCanvasStudioCommitBoundary(rootRef, () => {
@@ -140,6 +143,37 @@ const handleSubmitGeneration = () => {
   promptEditorRef.value?.flushTokens?.()
   emit('submit-generation')
 }
+
+const syncEditorHtml = async (html) => {
+  if (!editableRef.value) {
+    return
+  }
+  if (editableRef.value.innerHTML === String(html || '')) {
+    return
+  }
+  editableRef.value.innerHTML = String(html || '')
+  await nextTick()
+}
+
+const handleEditorInput = (event) => {
+  emit('update:text', event.target.innerHTML)
+}
+
+const handleEditorBlur = (event) => {
+  emit('update:text', event.target.innerHTML)
+}
+
+watch(
+  () => props.draft.text,
+  (value) => {
+    void syncEditorHtml(value)
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  void syncEditorHtml(props.draft.text)
+})
 </script>
 
 <style scoped>
@@ -171,7 +205,7 @@ button {
 
 .floating-header {
   position: absolute;
-  top: -48px;
+  top: var(--studio-header-top, -48px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -236,29 +270,57 @@ button {
   border-radius: 24px;
   backdrop-filter: blur(28px);
   padding: 24px 28px;
+  overflow: hidden;
 }
 
 .rich-textarea {
   width: 100%;
   height: 100%;
-  background: transparent;
-  border: none;
   outline: none;
   color: #1f2a44;
   font-size: 16px;
   line-height: 1.7;
-  resize: none;
+  overflow-y: auto;
+  word-break: break-word;
+}
+
+.rich-textarea :deep(h1),
+.rich-textarea :deep(h2),
+.rich-textarea :deep(h3) {
+  margin: 0 0 12px;
+  line-height: 1.3;
+}
+
+.rich-textarea :deep(p),
+.rich-textarea :deep(ul),
+.rich-textarea :deep(ol) {
+  margin: 0 0 10px;
+}
+
+.rich-textarea :deep(ul),
+.rich-textarea :deep(ol) {
+  padding-left: 20px;
+}
+
+.rich-textarea.is-empty::before {
+  content: attr(data-placeholder);
+  color: #98a2b3;
+  pointer-events: none;
 }
 
 .studio-docked-panel {
   position: absolute;
-  top: calc(100% + 22px);
+  top: var(--studio-panel-top, calc(100% + 22px));
+  bottom: var(--studio-panel-bottom, auto);
   left: 50%;
-  transform: translateX(-50%);
-  width: min(560px, calc(100% + 80px));
+  transform: translateX(calc(-50% + var(--studio-panel-offset-x, 0px)));
+  width: min(var(--studio-panel-max-width, 560px), calc(100vw - 64px));
+  max-width: calc(100vw - 64px);
   border-radius: 20px;
   padding: 14px 16px;
   box-shadow: 0 12px 48px -8px rgba(0, 0, 0, 0.55);
+  max-height: min(320px, calc(100vh - 48px));
+  overflow: visible;
 }
 
 .panel-toolbar,
@@ -272,6 +334,7 @@ button {
 .panel-toolbar {
   margin-top: 14px;
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .tool-select {

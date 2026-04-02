@@ -367,7 +367,7 @@ const updateMentionQuery = () => {
   }
 
   const textBeforeCaret = String(caretContext.node.textContent || '').slice(0, caretContext.offset)
-  const match = textBeforeCaret.match(/(?:^|\\s)@([^\\s@]*)$/)
+  const match = textBeforeCaret.match(/(?:^|\s)@([^\s@]*)$/)
   if (!match) {
     closeReferencePicker()
     return
