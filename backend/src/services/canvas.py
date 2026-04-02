@@ -6,12 +6,14 @@ import io
 import json
 import re
 import uuid
+from urllib.parse import urlparse, unquote
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import httpx
 from fastapi import UploadFile
 from sqlalchemy import delete, desc, func, select
 
+from src.core.config import settings
 from src.core.exceptions import BusinessLogicError, NotFoundError
 from src.core.logging import get_logger
 from src.models.api_key import APIKey
@@ -50,6 +52,21 @@ MEDIA_URL_TO_OBJECT_KEY_FIELDS = {
 
 
 class CanvasService(BaseService):
+    def _extract_object_key_from_media_url(self, media_url: Any) -> str:
+        value = str(media_url or "").strip()
+        if not value:
+            return ""
+        if value.startswith("uploads/"):
+            return value
+        parsed = urlparse(value)
+        path = unquote(parsed.path or "").lstrip("/")
+        bucket_prefix = f"{settings.MINIO_BUCKET_NAME}/"
+        if path.startswith(bucket_prefix):
+            path = path[len(bucket_prefix):]
+        if path.startswith("uploads/"):
+            return path
+        return ""
+
     async def list_documents(self, user_id: str, page: int = 1, size: int = 20) -> Tuple[List[CanvasDocument], int]:
         count_stmt = select(func.count(CanvasDocument.id)).where(CanvasDocument.user_id == ensure_canvas_uuid(user_id))
         total = (await self.execute(count_stmt)).scalar() or 0
@@ -454,6 +471,10 @@ class CanvasService(BaseService):
             return {}
         sanitized = dict(content)
         for url_field, object_key_field in MEDIA_URL_TO_OBJECT_KEY_FIELDS.items():
+            if not sanitized.get(object_key_field):
+                extracted_object_key = self._extract_object_key_from_media_url(sanitized.get(url_field))
+                if extracted_object_key:
+                    sanitized[object_key_field] = extracted_object_key
             if sanitized.get(object_key_field):
                 sanitized.pop(url_field, None)
         return sanitized
@@ -463,12 +484,31 @@ class CanvasService(BaseService):
             return {}
         sanitized = dict(payload)
         for url_field, object_key_field in MEDIA_URL_TO_OBJECT_KEY_FIELDS.items():
+            if not sanitized.get(object_key_field):
+                extracted_object_key = self._extract_object_key_from_media_url(sanitized.get(url_field))
+                if extracted_object_key:
+                    sanitized[object_key_field] = extracted_object_key
             if sanitized.get(object_key_field):
                 sanitized.pop(url_field, None)
         return sanitized
 
 
 class CanvasGenerationService(BaseService):
+    def _extract_object_key_from_media_url(self, media_url: Any) -> str:
+        value = str(media_url or "").strip()
+        if not value:
+            return ""
+        if value.startswith("uploads/"):
+            return value
+        parsed = urlparse(value)
+        path = unquote(parsed.path or "").lstrip("/")
+        bucket_prefix = f"{settings.MINIO_BUCKET_NAME}/"
+        if path.startswith(bucket_prefix):
+            path = path[len(bucket_prefix):]
+        if path.startswith("uploads/"):
+            return path
+        return ""
+
     async def prepare_text_generation(self, item_id: str, user_id: str, request: Dict[str, Any]) -> Tuple[CanvasItem, CanvasItemGeneration]:
         return await self._prepare_generation(item_id, user_id, CanvasGenerationType.TEXT.value, request)
 
@@ -676,7 +716,16 @@ class CanvasGenerationService(BaseService):
             provider = self._build_provider(api_key)
             image_kwargs: Dict[str, Any] = {}
             if api_key.provider.lower() == "custom":
-                reference_images = (request.get("options") or {}).get("reference_image_urls") or []
+                options = request.get("options") or {}
+                reference_images = self._resolve_image_reference_inputs(
+                    options.get("style_reference_image_object_key")
+                    or options.get("style_reference_image_url")
+                    or item.content_json.get("reference_image_object_key")
+                    or item.content_json.get("reference_image_url"),
+                    options.get("reference_image_object_keys")
+                    or options.get("reference_image_urls")
+                    or [],
+                )
                 if reference_images:
                     image_kwargs["reference_images"] = reference_images
             response = await provider.generate_image(
@@ -829,22 +878,34 @@ class CanvasGenerationService(BaseService):
             status_payload = await self._fetch_video_status_payload(provider, provider_task_id)
         except Exception as exc:
             logger.warning("Canvas video status fetch failed but generation is kept alive: %s", exc)
+            provider_payload = dict(generation.result_payload_json or {})
+            provider_payload.update(
+                {
+                    "transient_status_issue": True,
+                    "status_fetch_error": str(exc),
+                }
+            )
             return {
                 "task_id": str(generation.id),
                 "provider_task_id": provider_task_id,
                 "status": generation.status,
                 "result_video_object_key": result_video_object_key or None,
                 "error_message": generation.error_message,
-                "provider_payload": generation.result_payload_json or {},
+                "provider_payload": provider_payload,
                 "item": item,
             }
         provider_status = str(status_payload.get("status") or status_payload.get("state") or generation.status or "").lower()
         provider_video_url = self._extract_video_url(status_payload)
         if not provider_video_url and provider_status in {"completed", "succeeded", "success", "done"}:
-            content_payload = await self._fetch_video_content_payload(provider, provider_task_id)
-            provider_video_url = self._extract_video_url(content_payload)
-            if provider_video_url:
-                status_payload = {**status_payload, "content": content_payload}
+            try:
+                content_payload = await self._fetch_video_content_payload(provider, provider_task_id)
+            except Exception as exc:
+                logger.warning("Canvas video content fetch failed after completion (task=%s): %s", provider_task_id, exc)
+                content_payload = None
+            if content_payload:
+                provider_video_url = self._extract_video_url(content_payload)
+                if provider_video_url:
+                    status_payload = {**status_payload, "content": content_payload}
 
         normalized_status = self._normalize_video_provider_status(provider_status)
         if provider_video_url and normalized_status == CanvasRunStatus.COMPLETED.value:
@@ -989,6 +1050,7 @@ class CanvasGenerationService(BaseService):
         options = dict(item.content_json.get("options") or {})
         options.update(request.get("options") or {})
 
+        resolved_mentions = self._sanitize_resolved_mentions_for_storage(resolved_mentions)
         normalized = {
             "prompt": prompt,
             "prompt_plain_text": prompt_plain_text,
@@ -999,16 +1061,20 @@ class CanvasGenerationService(BaseService):
             "options": options,
         }
 
-        reference_image_urls = self._collect_reference_image_urls(prompt_tokens, resolved_mentions)
+        reference_image_object_keys = self._collect_reference_image_object_keys(prompt_tokens, resolved_mentions)
         reference_text_ids = self._collect_reference_text_ids(resolved_mentions)
+        style_reference_image_object_key = self._resolve_style_reference_image_object_key(item, request, options)
 
-        if generation_type == CanvasGenerationType.IMAGE.value and reference_image_urls:
-            normalized["options"]["reference_image_urls"] = reference_image_urls
+        if generation_type == CanvasGenerationType.IMAGE.value:
+            if reference_image_object_keys:
+                normalized["options"]["reference_image_object_keys"] = reference_image_object_keys
+            if style_reference_image_object_key:
+                normalized["options"]["style_reference_image_object_key"] = style_reference_image_object_key
 
         if generation_type == CanvasGenerationType.VIDEO.value:
             normalized["options"]["reference_image_urls"] = (
                 options.get("reference_image_urls")
-                or reference_image_urls
+                or self._collect_reference_image_urls(prompt_tokens, resolved_mentions)
                 or item.content_json.get("reference_image_urls")
                 or []
             )
@@ -1145,6 +1211,66 @@ class CanvasGenerationService(BaseService):
                 break
         return results
 
+    def _collect_reference_image_object_keys(
+        self,
+        prompt_tokens: List[Dict[str, Any]],
+        resolved_mentions: List[Dict[str, Any]],
+        *,
+        limit: int = REFERENCE_IMAGE_LIMIT,
+    ) -> List[str]:
+        if not prompt_tokens or not resolved_mentions:
+            return []
+
+        mention_by_id = {}
+        mention_by_node_key = {}
+        for mention in resolved_mentions:
+            if str(mention.get("status") or "").strip() != "resolved":
+                continue
+            mention_id = str(mention.get("mentionId") or "").strip()
+            if mention_id:
+                mention_by_id[mention_id] = mention
+            node_key = self._build_node_key(mention.get("nodeType"), mention.get("nodeId"))
+            if node_key != ":" and node_key not in mention_by_node_key:
+                mention_by_node_key[node_key] = mention
+
+        results: List[str] = []
+        seen_node_ids = set()
+        for token in prompt_tokens:
+            if str(token.get("type") or "").strip() != "mention":
+                continue
+            mention = None
+            mention_id = str(token.get("mentionId") or "").strip()
+            if mention_id:
+                mention = mention_by_id.get(mention_id)
+            if mention is None:
+                mention = mention_by_node_key.get(self._build_node_key(token.get("nodeType"), token.get("nodeId")))
+            if mention is None:
+                continue
+            if str(mention.get("nodeType") or "").strip() != CanvasItemType.IMAGE.value:
+                continue
+
+            node_id = str(mention.get("nodeId") or "").strip()
+            if node_id and node_id in seen_node_ids:
+                continue
+
+            resolved_content = mention.get("resolvedContent") or {}
+            if not isinstance(resolved_content, dict):
+                resolved_content = {}
+            object_key = str(
+                resolved_content.get("object_key")
+                or resolved_content.get("objectKey")
+                or ""
+            ).strip()
+            if not object_key:
+                continue
+
+            results.append(object_key)
+            if node_id:
+                seen_node_ids.add(node_id)
+            if len(results) >= limit:
+                break
+        return results
+
     def _collect_reference_text_ids(self, resolved_mentions: List[Dict[str, Any]]) -> List[str]:
         text_ids: List[str] = []
         seen = set()
@@ -1172,6 +1298,58 @@ class CanvasGenerationService(BaseService):
         if not isinstance(resolved_content, dict):
             resolved_content = {}
         return self._sanitize_reference_text(str(resolved_content.get("text") or ""))
+
+    def _sanitize_resolved_mentions_for_storage(self, resolved_mentions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        sanitized_mentions: List[Dict[str, Any]] = []
+        for mention in resolved_mentions:
+            if not isinstance(mention, dict):
+                continue
+            sanitized_mention = dict(mention)
+            resolved_content = sanitized_mention.get("resolvedContent")
+            if isinstance(resolved_content, dict):
+                sanitized_content = dict(resolved_content)
+                object_key = str(
+                    sanitized_content.get("object_key")
+                    or sanitized_content.get("objectKey")
+                    or ""
+                ).strip()
+                if object_key:
+                    sanitized_content["object_key"] = object_key
+                    sanitized_content.pop("objectKey", None)
+                    sanitized_content.pop("url", None)
+                sanitized_mention["resolvedContent"] = sanitized_content
+            sanitized_mentions.append(sanitized_mention)
+        return sanitized_mentions
+
+    def _resolve_style_reference_image_object_key(
+        self,
+        item: CanvasItem,
+        request: Dict[str, Any],
+        options: Dict[str, Any],
+    ) -> str:
+        candidates = (
+            options.get("style_reference_image_object_key"),
+            options.get("style_reference_image_url"),
+            request.get("style_reference_image_object_key"),
+            request.get("style_reference_image_url"),
+            item.content_json.get("reference_image_object_key"),
+            item.content_json.get("reference_image_url"),
+            item.content_json.get("reference_image_key"),
+        )
+        for candidate in candidates:
+            value = str(candidate or "").strip()
+            if value:
+                return value
+        return ""
+
+    def _resolve_image_reference_inputs(self, style_reference: Any, references: List[str]) -> List[str]:
+        resolved: List[str] = []
+        for candidate in [style_reference, *(references or [])]:
+            value = str(candidate or "").strip()
+            if not value or value in resolved:
+                continue
+            resolved.append(value)
+        return resolved
 
     def _sanitize_reference_text(self, value: str) -> str:
         text = str(value or "").strip()
@@ -1485,6 +1663,10 @@ class CanvasGenerationService(BaseService):
             return {}
         sanitized = dict(content)
         for url_field, object_key_field in MEDIA_URL_TO_OBJECT_KEY_FIELDS.items():
+            if not sanitized.get(object_key_field):
+                extracted_object_key = self._extract_object_key_from_media_url(sanitized.get(url_field))
+                if extracted_object_key:
+                    sanitized[object_key_field] = extracted_object_key
             if sanitized.get(object_key_field):
                 sanitized.pop(url_field, None)
         return sanitized
@@ -1494,6 +1676,10 @@ class CanvasGenerationService(BaseService):
             return {}
         sanitized = dict(payload)
         for url_field, object_key_field in MEDIA_URL_TO_OBJECT_KEY_FIELDS.items():
+            if not sanitized.get(object_key_field):
+                extracted_object_key = self._extract_object_key_from_media_url(sanitized.get(url_field))
+                if extracted_object_key:
+                    sanitized[object_key_field] = extracted_object_key
             if sanitized.get(object_key_field):
                 sanitized.pop(url_field, None)
         return sanitized
@@ -1535,28 +1721,35 @@ class CanvasGenerationService(BaseService):
         raise last_error
 
     async def _poll_video_result(self, provider: VectorEngineProvider, provider_task_id: str) -> str:
-        consecutive_failures = 0
         for _ in range(60):
             try:
                 status_payload = await self._fetch_video_status_payload(provider, provider_task_id)
             except Exception as exc:
-                consecutive_failures += 1
-                if consecutive_failures >= 6:
-                    raise BusinessLogicError("视频任务状态查询连续失败，请稍后重试") from exc
+                logger.warning("Canvas video status fetch transient failure (task=%s): %s", provider_task_id, exc)
                 await asyncio.sleep(5)
                 continue
 
-            consecutive_failures = 0
             state = str(status_payload.get("status") or status_payload.get("state") or "").lower()
             if state in {"completed", "succeeded", "success", "done"}:
                 video_url = self._extract_video_url(status_payload)
                 if video_url:
                     return video_url
-                content_payload = await self._fetch_video_content_payload(provider, provider_task_id)
+                try:
+                    content_payload = await self._fetch_video_content_payload(provider, provider_task_id)
+                except Exception as exc:
+                    logger.warning(
+                        "Canvas video content fetch transient failure after completion (task=%s): %s",
+                        provider_task_id,
+                        exc,
+                    )
+                    await asyncio.sleep(5)
+                    continue
                 video_url = self._extract_video_url(content_payload)
                 if video_url:
                     return video_url
-                raise BusinessLogicError("视频任务已完成，但未返回可用 video_url")
+                logger.warning("Canvas video task completed without video_url yet (task=%s)", provider_task_id)
+                await asyncio.sleep(5)
+                continue
             if state in {"failed", "error", "cancelled", "canceled"}:
                 raise BusinessLogicError(status_payload.get("message") or status_payload.get("error") or "视频生成失败")
             await asyncio.sleep(5)

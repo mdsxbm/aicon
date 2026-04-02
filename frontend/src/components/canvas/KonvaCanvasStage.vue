@@ -42,6 +42,16 @@
     <div v-if="marqueeOverlayStyle" class="stage-selection-overlay" :style="marqueeOverlayStyle"></div>
 
     <div
+      v-for="item in statusOverlayItems"
+      :key="`${item.id}-status-overlay`"
+      class="stage-status-chip"
+      :class="`stage-status-chip--${item.statusMeta.tone}`"
+      :style="buildStatusOverlayStyle(item)"
+    >
+      <div class="stage-status-chip__label">{{ item.statusMeta.label }}</div>
+    </div>
+
+    <div
       v-for="item in generatingOverlayItems"
       :key="`${item.id}-generating-overlay`"
       class="stage-generating-overlay"
@@ -64,6 +74,7 @@ import { resolveCanvasVideoNodeSize } from '@/utils/canvasVideoNodeLayout'
 import {
   releaseCanvasStageVideoEntry,
   resolveCanvasStageGeneratingMeta,
+  resolveCanvasRunStatusMeta,
   resolveCanvasStageMediaUrl,
   resolveCanvasStagePreviewText,
   resolveStageVideoPreviewTargets
@@ -153,6 +164,18 @@ const generatingOverlayItems = computed(() =>
         return null
       }
       return { ...item, generatingMeta }
+    })
+    .filter(Boolean)
+)
+
+const statusOverlayItems = computed(() =>
+  renderedItems.value
+    .map((item) => {
+      const statusMeta = resolveCanvasRunStatusMeta(item)
+      if (!statusMeta) {
+        return null
+      }
+      return { ...item, statusMeta }
     })
     .filter(Boolean)
 )
@@ -268,27 +291,28 @@ const buildItemMediaConfig = (item) => {
 
 const buildItemTitleConfig = (item) => ({
   x: item.item_type === 'text' ? 18 : 20,
-  y: item.item_type === 'text' ? 16 : 18,
+  y: item.item_type === 'text' ? 14 : 18,
   width: item.width - (item.item_type === 'text' ? 32 : 40),
   text: item.title || fallbackTitle(item.item_type),
   fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
   fill: '#1f2a44',
   fontSize: item.item_type === 'text' ? 14 : 16,
   fontStyle: 'bold',
+  lineHeight: 1.2,
   ellipsis: true,
   visible: !hasItemMedia(item)
 })
 
 const buildItemPreviewConfig = (item) => ({
   x: item.item_type === 'text' ? 16 : 20,
-  y: item.item_type === 'text' ? 46 : 52,
+  y: item.item_type === 'text' ? 40 : 52,
   width: item.width - (item.item_type === 'text' ? 32 : 40),
-  height: Math.max(item.height - (item.item_type === 'text' ? 62 : 84), 24),
+  height: Math.max(item.height - (item.item_type === 'text' ? 56 : 84), 24),
   text: resolveCanvasStagePreviewText(item),
   fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
   fill: item.item_type === 'text' ? '#52607a' : '#42526b',
-  fontSize: item.item_type === 'text' ? 12 : 13,
-  lineHeight: item.item_type === 'text' ? 1.55 : 1.6,
+  fontSize: item.item_type === 'text' ? 12.5 : 13,
+  lineHeight: item.item_type === 'text' ? 1.65 : 1.6,
   wrap: 'word',
   ellipsis: true,
   visible: !hasItemMedia(item)
@@ -298,6 +322,10 @@ const buildGeneratingOverlayStyle = (item) => ({
   width: `${item.width * stageScale.value}px`,
   height: `${item.height * stageScale.value}px`,
   transform: `translate(${item.position_x * stageScale.value + stagePosition.value.x}px, ${item.position_y * stageScale.value + stagePosition.value.y}px)`
+})
+
+const buildStatusOverlayStyle = (item) => ({
+  transform: `translate(${item.position_x * stageScale.value + stagePosition.value.x + 14}px, ${item.position_y * stageScale.value + stagePosition.value.y + 14}px)`
 })
 
 const buildConnectionLineConfig = (connection) => ({
@@ -666,6 +694,64 @@ watch(
   overflow: hidden;
   z-index: 3;
   transform-origin: top left;
+}
+
+.stage-status-chip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 4;
+  transform-origin: top left;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(34, 57, 98, 0.12);
+}
+
+.stage-status-chip__label {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stage-status-chip--info {
+  background: rgba(238, 244, 255, 0.94);
+  border-color: rgba(75, 120, 255, 0.2);
+}
+
+.stage-status-chip--info .stage-status-chip__label {
+  color: #355ce0;
+}
+
+.stage-status-chip--pending,
+.stage-status-chip--warning {
+  background: rgba(255, 248, 235, 0.94);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.stage-status-chip--pending .stage-status-chip__label,
+.stage-status-chip--warning .stage-status-chip__label {
+  color: #b7791f;
+}
+
+.stage-status-chip--success {
+  background: rgba(238, 249, 242, 0.94);
+  border-color: rgba(34, 197, 94, 0.18);
+}
+
+.stage-status-chip--success .stage-status-chip__label {
+  color: #15803d;
+}
+
+.stage-status-chip--error {
+  background: rgba(254, 242, 242, 0.94);
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.stage-status-chip--error .stage-status-chip__label {
+  color: #dc2626;
 }
 
 .stage-selection-overlay {

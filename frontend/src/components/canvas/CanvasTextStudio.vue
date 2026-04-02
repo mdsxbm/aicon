@@ -10,7 +10,7 @@
     @pointerdown.capture="handleRootPointerDown"
     @focusin="handleRootFocusIn"
   >
-    <div class="floating-header">
+    <div class="floating-header" @mousedown.stop="handleHeaderPointerDown">
       <div class="text-label">
         <el-icon class="icon"><Document /></el-icon>
         <span>文本节点</span>
@@ -31,7 +31,11 @@
       <div class="plus-icon"><el-icon><Plus /></el-icon></div>
     </div>
 
-    <div class="editor-glass-card">
+    <div class="editor-glass-card" @mousedown.stop="handleEditorCardPointerDown">
+      <div class="drag-strip drag-strip--top" @mousedown.stop="handleCardDragZonePointerDown"></div>
+      <div class="drag-strip drag-strip--right" @mousedown.stop="handleCardDragZonePointerDown"></div>
+      <div class="drag-strip drag-strip--bottom" @mousedown.stop="handleCardDragZonePointerDown"></div>
+      <div class="drag-strip drag-strip--left" @mousedown.stop="handleCardDragZonePointerDown"></div>
       <div
         ref="editableRef"
         class="rich-textarea"
@@ -110,7 +114,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Delete, Document, Loading, Plus, Top } from '@element-plus/icons-vue'
 import CanvasPromptMentionEditor from '@/components/canvas/CanvasPromptMentionEditor.vue'
 import { useCanvasStudioCommitBoundary } from '@/composables/useCanvasStudioCommitBoundary'
@@ -127,11 +131,12 @@ const props = defineProps({
   modelOptionsLoading: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['delete', 'focus-item', 'handle-drag', 'submit-generation', 'update:api-key-id', 'update:model-id', 'update:text', 'update:title', 'update:tokens', 'commit'])
+const emit = defineEmits(['delete', 'drag-node', 'focus-item', 'handle-drag', 'submit-generation', 'update:api-key-id', 'update:model-id', 'update:text', 'update:title', 'update:tokens', 'commit'])
 
 const promptEditorRef = ref(null)
 const rootRef = ref(null)
 const editableRef = ref(null)
+const pendingEditorCardDrag = ref(null)
 const canSubmitPrompt = computed(() => String(props.draft.promptPlainText || '').trim().length > 0)
 
 const { handleRootPointerDown, handleRootFocusIn } = useCanvasStudioCommitBoundary(rootRef, () => {
@@ -142,6 +147,66 @@ const { handleRootPointerDown, handleRootFocusIn } = useCanvasStudioCommitBounda
 const handleSubmitGeneration = () => {
   promptEditorRef.value?.flushTokens?.()
   emit('submit-generation')
+}
+
+const handleHeaderPointerDown = (event) => {
+  const interactiveTarget = event.target.closest('input, button, .el-select, .el-input')
+  if (interactiveTarget) {
+    return
+  }
+  emit('drag-node', event)
+}
+
+const clearPendingEditorCardDrag = () => {
+  if (typeof window !== 'undefined' && pendingEditorCardDrag.value) {
+    window.removeEventListener('mousemove', handleEditorCardPointerMove, true)
+    window.removeEventListener('mouseup', handleEditorCardPointerUp, true)
+  }
+  pendingEditorCardDrag.value = null
+}
+
+const handleEditorCardPointerMove = (event) => {
+  if (!pendingEditorCardDrag.value) {
+    return
+  }
+  const deltaX = event.clientX - pendingEditorCardDrag.value.startX
+  const deltaY = event.clientY - pendingEditorCardDrag.value.startY
+  if (!pendingEditorCardDrag.value.triggered && Math.hypot(deltaX, deltaY) >= 5) {
+    pendingEditorCardDrag.value = { ...pendingEditorCardDrag.value, triggered: true }
+    emit('drag-node', event)
+  }
+}
+
+const handleEditorCardPointerUp = () => {
+  clearPendingEditorCardDrag()
+}
+
+const handleEditorCardPointerDown = (event) => {
+  const interactiveTarget = event.target.closest('.rich-textarea, input, button, .el-select, .el-input')
+  if (interactiveTarget) {
+    return
+  }
+  pendingEditorCardDrag.value = {
+    startX: event.clientX,
+    startY: event.clientY,
+    triggered: false
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('mousemove', handleEditorCardPointerMove, true)
+    window.addEventListener('mouseup', handleEditorCardPointerUp, true)
+  }
+}
+
+const handleCardDragZonePointerDown = (event) => {
+  pendingEditorCardDrag.value = {
+    startX: event.clientX,
+    startY: event.clientY,
+    triggered: false
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('mousemove', handleEditorCardPointerMove, true)
+    window.addEventListener('mouseup', handleEditorCardPointerUp, true)
+  }
 }
 
 const syncEditorHtml = async (html) => {
@@ -173,6 +238,10 @@ watch(
 
 onMounted(() => {
   void syncEditorHtml(props.draft.text)
+})
+
+onBeforeUnmount(() => {
+  clearPendingEditorCardDrag()
 })
 </script>
 
@@ -210,10 +279,12 @@ button {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
+  max-width: min(calc(100vw - 56px), 420px);
   gap: 12px;
   white-space: nowrap;
   padding: 6px 16px;
   border-radius: 999px;
+  cursor: move;
 }
 
 .text-label {
@@ -231,7 +302,8 @@ button {
   color: #1f2a44;
   font-size: 13px;
   font-weight: 600;
-  width: 140px;
+  width: 160px;
+  min-width: 0;
 }
 
 .node-handle {
@@ -273,7 +345,47 @@ button {
   overflow: hidden;
 }
 
+.drag-strip {
+  position: absolute;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.drag-strip--top,
+.drag-strip--bottom {
+  left: 24px;
+  right: 24px;
+  height: 14px;
+  cursor: grab;
+}
+
+.drag-strip--top {
+  top: 10px;
+}
+
+.drag-strip--bottom {
+  bottom: 10px;
+}
+
+.drag-strip--left,
+.drag-strip--right {
+  top: 24px;
+  bottom: 24px;
+  width: 14px;
+  cursor: grab;
+}
+
+.drag-strip--left {
+  left: 10px;
+}
+
+.drag-strip--right {
+  right: 10px;
+}
+
 .rich-textarea {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   outline: none;
@@ -289,6 +401,7 @@ button {
 .rich-textarea :deep(h3) {
   margin: 0 0 12px;
   line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 
 .rich-textarea :deep(p),
@@ -300,6 +413,64 @@ button {
 .rich-textarea :deep(ul),
 .rich-textarea :deep(ol) {
   padding-left: 20px;
+}
+
+.rich-textarea :deep(li) {
+  margin: 0 0 6px;
+}
+
+.rich-textarea :deep(li:last-child) {
+  margin-bottom: 0;
+}
+
+.rich-textarea :deep(blockquote) {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid rgba(75, 120, 255, 0.28);
+  border-radius: 0 12px 12px 0;
+  background: rgba(75, 120, 255, 0.06);
+  color: #42526b;
+}
+
+.rich-textarea :deep(pre) {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(17, 24, 39, 0.05);
+  color: #1f2a44;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.rich-textarea :deep(code) {
+  padding: 0 4px;
+  border-radius: 6px;
+  background: rgba(17, 24, 39, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.94em;
+}
+
+.rich-textarea :deep(a) {
+  color: #355ce0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-textarea :deep(hr) {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px solid rgba(34, 57, 98, 0.12);
+}
+
+.rich-textarea :deep(strong) {
+  color: #1f2a44;
+}
+
+.rich-textarea :deep(em) {
+  color: #52607a;
 }
 
 .rich-textarea.is-empty::before {
@@ -314,7 +485,8 @@ button {
   bottom: var(--studio-panel-bottom, auto);
   left: 50%;
   transform: translateX(calc(-50% + var(--studio-panel-offset-x, 0px)));
-  width: min(var(--studio-panel-max-width, 560px), calc(100vw - 64px));
+  width: clamp(280px, calc(100vw - 64px), var(--studio-panel-max-width, 560px));
+  min-width: min(var(--studio-panel-min-width, 360px), calc(100vw - 64px));
   max-width: calc(100vw - 64px);
   border-radius: 20px;
   padding: 14px 16px;
@@ -365,5 +537,36 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .floating-header {
+    gap: 8px;
+    padding: 6px 12px;
+  }
+
+  .header-title-input {
+    width: 120px;
+  }
+
+  .toolbar-left,
+  .toolbar-right,
+  .panel-toolbar {
+    width: 100%;
+  }
+
+  .toolbar-left {
+    flex-wrap: wrap;
+  }
+
+  .tool-select {
+    flex: 1 1 160px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .toolbar-right {
+    justify-content: flex-end;
+  }
 }
 </style>

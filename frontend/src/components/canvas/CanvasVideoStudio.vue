@@ -9,7 +9,7 @@
     @pointerdown.capture="handleRootPointerDown"
     @focusin="handleRootFocusIn"
   >
-    <div class="floating-header">
+    <div class="floating-header" @mousedown.stop="handleHeaderPointerDown">
       <div class="image-label">
         <el-icon class="icon"><VideoCamera /></el-icon>
         <span>视频节点</span>
@@ -22,7 +22,7 @@
       </button>
     </div>
 
-    <div class="image-preview-card" @click="handlePreviewClick">
+    <div class="image-preview-card" @mousedown.stop="handlePreviewPointerDown" @click="handlePreviewClick">
       <video v-if="draft.resultVideoUrl" :src="draft.resultVideoUrl" class="preview-image" controls playsinline preload="metadata"></video>
       <div v-else class="empty-preview">输入提示词并连接上游参考节点</div>
       <CanvasGeneratingOverlay :visible="generating" label="AI 正在生成视频" hint="预计 2 至 10 分钟" />
@@ -36,6 +36,10 @@
     </div>
 
     <div class="studio-docked-panel">
+      <div v-if="statusMeta" class="status-banner" :class="`status-banner--${statusMeta.tone}`">
+        <div class="status-banner__label">{{ statusMeta.label }}</div>
+        <div class="status-banner__detail">{{ statusMeta.detail }}</div>
+      </div>
       <CanvasPromptMentionEditor
         ref="promptEditorRef"
         :tokens="draft.promptTokens"
@@ -116,7 +120,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { Delete, Loading, Plus, Top, Upload, VideoCamera } from '@element-plus/icons-vue'
 import CanvasGeneratingOverlay from '@/components/canvas/CanvasGeneratingOverlay.vue'
 import CanvasPromptMentionEditor from '@/components/canvas/CanvasPromptMentionEditor.vue'
@@ -128,6 +132,7 @@ const props = defineProps({
   availableReferenceItems: { type: Array, default: () => [] },
   globalReferenceItems: { type: Array, default: () => [] },
   referenceHintText: { type: String, default: '' },
+  statusMeta: { type: Object, default: null },
   generating: { type: Boolean, default: false },
   uploading: { type: Boolean, default: false },
   apiKeyOptions: { type: Array, default: () => [] },
@@ -135,12 +140,13 @@ const props = defineProps({
   modelOptionsLoading: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['commit', 'delete', 'focus-item', 'generate', 'handle-drag', 'history', 'update:api-key-id', 'update:model-id', 'update:title', 'update:tokens', 'upload'])
+const emit = defineEmits(['commit', 'delete', 'drag-node', 'focus-item', 'generate', 'handle-drag', 'history', 'update:api-key-id', 'update:model-id', 'update:title', 'update:tokens', 'upload'])
 
 const promptEditorRef = ref(null)
 const rootRef = ref(null)
 const fileInputRef = ref(null)
 const previewDialogVisible = ref(false)
+const pendingPreviewDrag = ref(null)
 const canSubmitPrompt = computed(() => String(props.draft.promptPlainText || '').trim().length > 0)
 
 const { handleRootPointerDown, handleRootFocusIn } = useCanvasStudioCommitBoundary(rootRef, () => {
@@ -162,11 +168,73 @@ const handleFileChange = (event) => {
 }
 
 const handlePreviewClick = () => {
+  if (pendingPreviewDrag.value?.triggered) {
+    pendingPreviewDrag.value = null
+    return
+  }
   if (!props.draft.resultVideoUrl) {
     return
   }
   previewDialogVisible.value = true
 }
+
+const handleHeaderPointerDown = (event) => {
+  const interactiveTarget = event.target.closest('input, button, .el-select, .el-input')
+  if (interactiveTarget) {
+    return
+  }
+  emit('drag-node', event)
+}
+
+const clearPendingPreviewDrag = () => {
+  if (typeof window !== 'undefined' && pendingPreviewDrag.value) {
+    window.removeEventListener('mousemove', handlePreviewPointerMove, true)
+    window.removeEventListener('mouseup', handlePreviewPointerUp, true)
+  }
+  pendingPreviewDrag.value = null
+}
+
+const handlePreviewPointerMove = (event) => {
+  if (!pendingPreviewDrag.value) {
+    return
+  }
+  const deltaX = event.clientX - pendingPreviewDrag.value.startX
+  const deltaY = event.clientY - pendingPreviewDrag.value.startY
+  if (!pendingPreviewDrag.value.triggered && Math.hypot(deltaX, deltaY) >= 5) {
+    pendingPreviewDrag.value = { ...pendingPreviewDrag.value, triggered: true }
+    emit('drag-node', event)
+  }
+}
+
+const handlePreviewPointerUp = () => {
+  const triggered = pendingPreviewDrag.value?.triggered
+  clearPendingPreviewDrag()
+  if (triggered) {
+    window.setTimeout(() => {
+      pendingPreviewDrag.value = null
+    }, 0)
+  }
+}
+
+const handlePreviewPointerDown = (event) => {
+  const interactiveTarget = event.target.closest('button, input, .el-button')
+  if (interactiveTarget) {
+    return
+  }
+  pendingPreviewDrag.value = {
+    startX: event.clientX,
+    startY: event.clientY,
+    triggered: false
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('mousemove', handlePreviewPointerMove, true)
+    window.addEventListener('mouseup', handlePreviewPointerUp, true)
+  }
+}
+
+onBeforeUnmount(() => {
+  clearPendingPreviewDrag()
+})
 </script>
 
 <style scoped>
@@ -194,10 +262,12 @@ const handlePreviewClick = () => {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
+  max-width: min(calc(100vw - 56px), 460px);
   gap: 12px;
   white-space: nowrap;
   padding: 6px 16px;
   border-radius: 999px;
+  cursor: move;
 }
 
 .image-label {
@@ -209,7 +279,8 @@ const handlePreviewClick = () => {
 }
 
 .header-title-input {
-  width: 140px;
+  width: 160px;
+  min-width: 0;
   background: transparent;
   border: none;
   color: #1f2a44;
@@ -250,6 +321,11 @@ const handlePreviewClick = () => {
   justify-content: center;
   position: relative;
   overflow: hidden;
+  cursor: grab;
+}
+
+.image-preview-card:active {
+  cursor: grabbing;
 }
 
 .preview-image {
@@ -295,12 +371,70 @@ const handlePreviewClick = () => {
   bottom: var(--studio-panel-bottom, auto);
   left: 50%;
   transform: translateX(calc(-50% + var(--studio-panel-offset-x, 0px)));
-  width: min(var(--studio-panel-max-width, 620px), calc(100vw - 64px));
-  min-width: min(520px, calc(100vw - 64px));
+  width: clamp(300px, calc(100vw - 64px), var(--studio-panel-max-width, 620px));
+  min-width: min(var(--studio-panel-min-width, 420px), calc(100vw - 64px));
   border-radius: 20px;
   padding: 14px 16px;
   max-height: min(360px, calc(100vh - 48px));
   overflow: visible;
+}
+
+.status-banner {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: rgba(248, 250, 253, 0.92);
+}
+
+.status-banner__label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-banner__detail {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #52607a;
+}
+
+.status-banner--info {
+  background: rgba(238, 244, 255, 0.96);
+  border-color: rgba(75, 120, 255, 0.18);
+}
+
+.status-banner--info .status-banner__label {
+  color: #355ce0;
+}
+
+.status-banner--pending,
+.status-banner--warning {
+  background: rgba(255, 248, 235, 0.96);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.status-banner--pending .status-banner__label,
+.status-banner--warning .status-banner__label {
+  color: #b7791f;
+}
+
+.status-banner--success {
+  background: rgba(238, 249, 242, 0.96);
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+.status-banner--success .status-banner__label {
+  color: #15803d;
+}
+
+.status-banner--error {
+  background: rgba(254, 242, 242, 0.96);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.status-banner--error .status-banner__label {
+  color: #dc2626;
 }
 
 .panel-toolbar,
@@ -360,5 +494,36 @@ const handlePreviewClick = () => {
   display: block;
   width: 100%;
   max-height: 80vh;
+}
+
+@media (max-width: 720px) {
+  .floating-header {
+    gap: 8px;
+    padding: 6px 12px;
+  }
+
+  .header-title-input {
+    width: 120px;
+  }
+
+  .panel-toolbar,
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+  }
+
+  .toolbar-left {
+    flex-wrap: wrap;
+  }
+
+  .tool-select {
+    flex: 1 1 160px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .toolbar-right {
+    justify-content: flex-end;
+  }
 }
 </style>

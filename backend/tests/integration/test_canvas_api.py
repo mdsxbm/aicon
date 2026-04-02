@@ -210,6 +210,103 @@ class TestCanvasDocumentApi:
         assert generated["item"]["last_run_status"] == "pending"
 
     @pytest.mark.asyncio
+    async def test_generate_image_uses_prompt_mentions_and_style_reference_object_keys(self, client, auth_headers):
+        create_response = await client.post(
+            "/api/v1/canvas-documents",
+            headers=auth_headers,
+            json={"title": "Styled Image Canvas"},
+        )
+        assert create_response.status_code == 201
+        canvas_id = create_response.json()["id"]
+
+        item_id = "44444444-4444-4444-4444-444444444444"
+        storage_client = Mock()
+        storage_client.get_presigned_url.side_effect = lambda object_key: f"https://cdn.example.com/{object_key}"
+
+        with (
+            patch("src.services.canvas.get_storage_client", new_callable=AsyncMock, return_value=storage_client),
+            patch("src.api.v1.canvas.get_storage_client", new_callable=AsyncMock, return_value=storage_client),
+        ):
+            save_graph_response = await client.put(
+                f"/api/v1/canvas-documents/{canvas_id}/graph",
+                headers=auth_headers,
+                json={
+                    "items": [
+                        {
+                            "id": item_id,
+                            "item_type": "image",
+                            "title": "Image Generator",
+                            "position_x": 0,
+                            "position_y": 0,
+                            "width": 360,
+                            "height": 220,
+                            "z_index": 1,
+                            "content": {
+                                "prompt": "A poster portrait",
+                                "reference_image_object_key": "uploads/style-ref.png",
+                                "reference_image_url": "https://example.com/style-ref.png",
+                            },
+                            "generation_config": {
+                                "api_key_id": "33333333-3333-3333-3333-333333333333",
+                                "model": "gpt-image-1",
+                            },
+                        }
+                    ],
+                    "connections": [],
+                },
+            )
+        assert save_graph_response.status_code == 200
+
+        with (
+            patch("src.api.v1.canvas.dispatch_canvas_image_generation", return_value="task-image-structured"),
+            patch("src.services.canvas.get_storage_client", new_callable=AsyncMock, return_value=storage_client),
+            patch("src.api.v1.canvas.get_storage_client", new_callable=AsyncMock, return_value=storage_client),
+        ):
+            generate_response = await client.post(
+                f"/api/v1/canvas-items/{item_id}/generate-image",
+                headers=auth_headers,
+                json={
+                    "prompt_plain_text": "以 @参考图 为风格生成海报",
+                    "prompt_tokens": [
+                        {"type": "text", "text": "以 "},
+                        {
+                            "type": "mention",
+                            "mentionId": "mention-image-1",
+                            "nodeId": "image-ref-1",
+                            "nodeType": "image",
+                            "nodeTitleSnapshot": "参考图",
+                        },
+                        {"type": "text", "text": " 为风格生成海报"},
+                    ],
+                    "resolved_mentions": [
+                        {
+                            "mentionId": "mention-image-1",
+                            "nodeId": "image-ref-1",
+                            "nodeType": "image",
+                            "nodeTitle": "参考图",
+                            "status": "resolved",
+                            "resolvedContent": {
+                                "object_key": "uploads/mention-ref.png",
+                                "url": "https://example.com/mention-ref.png",
+                            },
+                        }
+                    ],
+                },
+            )
+
+        assert generate_response.status_code == 200
+        generated = generate_response.json()
+        request_payload = generated["generation"]["request_payload"]
+        assert request_payload["prompt"] == "以 为风格生成海报"
+        assert request_payload["prompt_plain_text"] == "以 @参考图 为风格生成海报"
+        assert request_payload["options"]["reference_image_object_keys"] == ["uploads/mention-ref.png"]
+        assert request_payload["options"]["style_reference_image_object_key"] == "uploads/style-ref.png"
+        assert "reference_image_urls" not in request_payload["options"]
+        assert "style_reference_image_url" not in request_payload["options"]
+        assert request_payload["resolved_mentions"][0]["resolvedContent"]["object_key"] == "uploads/mention-ref.png"
+        assert "url" not in request_payload["resolved_mentions"][0]["resolvedContent"]
+
+    @pytest.mark.asyncio
     async def test_generate_video_creates_pending_generation_record(self, client, auth_headers):
         create_response = await client.post(
             "/api/v1/canvas-documents",
@@ -778,6 +875,80 @@ class TestCanvasDocumentApi:
         assert "reference_text_ids" not in kwargs
 
     @pytest.mark.asyncio
+    async def test_process_image_generation_passes_style_and_prompt_references_to_custom_provider(self, db_session):
+        from src.models.canvas import CanvasItem, CanvasItemGeneration
+        from src.services.canvas import CanvasGenerationService
+
+        item = CanvasItem(
+            id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            document_id="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            item_type="image",
+            title="Image Generator",
+            position_x=0,
+            position_y=0,
+            width=360,
+            height=220,
+            z_index=1,
+            content_json={
+                "prompt": "A poster portrait",
+                "reference_image_object_key": "uploads/style-ref.png",
+                "reference_image_url": "https://example.com/style-ref.png",
+            },
+            generation_config_json={
+                "api_key_id": "33333333-3333-3333-3333-333333333333",
+                "model": "gpt-image-1",
+            },
+            last_run_status="pending",
+            last_output_json={},
+        )
+        generation = CanvasItemGeneration(
+            id="cccccccc-cccc-cccc-cccc-cccccccccccc",
+            item_id=item.id,
+            document_id=item.document_id,
+            user_id="dddddddd-dddd-dddd-dddd-dddddddddddd",
+            generation_type="image",
+            request_payload_json={
+                "prompt": "以 为风格生成海报",
+                "prompt_plain_text": "以 @参考图 为风格生成海报",
+                "api_key_id": "33333333-3333-3333-3333-333333333333",
+                "model": "gpt-image-1",
+                "options": {
+                    "reference_image_object_keys": ["uploads/mention-ref.png"],
+                    "style_reference_image_object_key": "uploads/style-ref.png",
+                },
+            },
+            status="pending",
+            result_payload_json={},
+        )
+        db_session.add(item)
+        db_session.add(generation)
+        await db_session.commit()
+
+        service = CanvasGenerationService(db_session)
+        fake_api_key = Mock()
+        fake_api_key.provider = "custom"
+        fake_api_key.base_url = "https://api.example.com/v1"
+        fake_api_key.get_api_key.return_value = "test-key"
+
+        fake_provider = Mock()
+        fake_provider.generate_image = AsyncMock(return_value={"data": [{"url": "https://example.com/generated.png"}]})
+
+        with (
+            patch.object(service, "_resolve_api_key", AsyncMock(return_value=fake_api_key)),
+            patch.object(service, "_build_provider", return_value=fake_provider),
+            patch.object(service, "_resolve_image_result", AsyncMock(return_value={"object_key": "uploads/generated.png"})),
+        ):
+            result = await service.process_image_generation(str(generation.id))
+
+        assert result["status"] == "completed"
+        assert result["result_image_object_key"] == "uploads/generated.png"
+        fake_provider.generate_image.assert_awaited_once()
+        kwargs = fake_provider.generate_image.await_args.kwargs
+        assert kwargs["reference_images"] == ["uploads/style-ref.png", "uploads/mention-ref.png"]
+        assert "style_reference_image_object_key" not in kwargs
+        assert "reference_image_object_keys" not in kwargs
+
+    @pytest.mark.asyncio
     async def test_poll_video_result_tolerates_transient_status_failures(self, db_session):
         from src.services.canvas import CanvasGenerationService
 
@@ -1050,6 +1221,172 @@ class TestCanvasDocumentApi:
         assert payload["result_video_url"] == "https://cdn.example.com/uploads/generated-video.mp4"
         assert payload["item"]["content"]["result_video_url"] == "https://cdn.example.com/uploads/generated-video.mp4"
         assert payload["item"]["content"]["result_video_object_key"] == "uploads/generated-video.mp4"
+
+    @pytest.mark.asyncio
+    async def test_get_canvas_video_task_status_keeps_task_alive_on_transient_status_fetch_failure(self, client, auth_headers):
+        create_response = await client.post(
+            "/api/v1/canvas-documents",
+            headers=auth_headers,
+            json={"title": "Video Task Canvas Retry"},
+        )
+        assert create_response.status_code == 201
+        canvas_id = create_response.json()["id"]
+
+        item_id = "89898989-8989-8989-8989-898989898989"
+        save_graph_response = await client.put(
+            f"/api/v1/canvas-documents/{canvas_id}/graph",
+            headers=auth_headers,
+            json={
+                "items": [
+                    {
+                        "id": item_id,
+                        "item_type": "video",
+                        "title": "Retry Video Generator",
+                        "position_x": 0,
+                        "position_y": 0,
+                        "width": 360,
+                        "height": 220,
+                        "z_index": 1,
+                        "content": {"prompt": "fallback video prompt"},
+                        "generation_config": {
+                            "api_key_id": "33333333-3333-3333-3333-333333333333",
+                            "model": "veo_3_1-fast",
+                        },
+                    }
+                ],
+                "connections": [],
+            },
+        )
+        assert save_graph_response.status_code == 200
+
+        with patch("src.api.v1.canvas.dispatch_canvas_video_generation", return_value="task-video-retry"):
+            generate_response = await client.post(
+                f"/api/v1/canvas-items/{item_id}/generate-video",
+                headers=auth_headers,
+                json={"prompt": "Generate video"},
+            )
+        assert generate_response.status_code == 200
+
+        generation_id = generate_response.json()["generation_id"]
+        storage_client = Mock()
+        storage_client.get_presigned_url.side_effect = lambda object_key: f"https://cdn.example.com/{object_key}"
+
+        with (
+            patch("src.services.canvas.CanvasGenerationService._resolve_api_key", new_callable=AsyncMock) as resolve_api_key,
+            patch("src.services.canvas.VectorEngineProvider.get_task_status", new_callable=AsyncMock, side_effect=RuntimeError("temporary status failure")),
+            patch("src.api.v1.canvas.get_storage_client", new_callable=AsyncMock, return_value=storage_client),
+        ):
+            api_key = Mock()
+            api_key.provider = "vectorengine"
+            api_key.base_url = "https://api.vectorengine.ai/v1"
+            api_key.get_api_key.return_value = "test-key"
+            resolve_api_key.return_value = api_key
+            task_response = await client.get(
+                f"/api/v1/canvas-documents/{canvas_id}/items/{item_id}/video-tasks/{generation_id}",
+                headers=auth_headers,
+            )
+
+        assert task_response.status_code == 200
+        payload = task_response.json()
+        assert payload["task_id"] == generation_id
+        assert payload["status"] == "pending"
+        assert payload["provider_payload"]["transient_status_issue"] is True
+        assert "temporary status failure" in payload["provider_payload"]["status_fetch_error"]
+        assert payload["item"]["last_run_status"] == "pending"
+
+    @pytest.mark.asyncio
+    async def test_process_video_generation_keeps_waiting_after_transient_status_failures(self, client, auth_headers):
+        create_response = await client.post(
+            "/api/v1/canvas-documents",
+            headers=auth_headers,
+            json={"title": "Video Task Canvas Worker"},
+        )
+        assert create_response.status_code == 201
+        canvas_id = create_response.json()["id"]
+
+        item_id = "90909090-9090-9090-9090-909090909090"
+        save_graph_response = await client.put(
+            f"/api/v1/canvas-documents/{canvas_id}/graph",
+            headers=auth_headers,
+            json={
+                "items": [
+                    {
+                        "id": item_id,
+                        "item_type": "video",
+                        "title": "Worker Video Generator",
+                        "position_x": 0,
+                        "position_y": 0,
+                        "width": 360,
+                        "height": 220,
+                        "z_index": 1,
+                        "content": {"prompt": "fallback video prompt"},
+                        "generation_config": {
+                            "api_key_id": "33333333-3333-3333-3333-333333333333",
+                            "model": "veo_3_1-fast",
+                        },
+                    }
+                ],
+                "connections": [],
+            },
+        )
+        assert save_graph_response.status_code == 200
+
+        with patch("src.api.v1.canvas.dispatch_canvas_video_generation", return_value="task-video-worker"):
+            generate_response = await client.post(
+                f"/api/v1/canvas-items/{item_id}/generate-video",
+                headers=auth_headers,
+                json={"prompt": "Generate video"},
+            )
+        assert generate_response.status_code == 200
+
+        generation_id = generate_response.json()["generation_id"]
+
+        from src.services.canvas import CanvasGenerationService
+
+        fake_api_key = Mock()
+        fake_api_key.provider = "vectorengine"
+        fake_api_key.base_url = "https://api.vectorengine.ai/v1"
+        fake_api_key.get_api_key.return_value = "test-key"
+
+        provider = Mock()
+        provider.create_video = AsyncMock(return_value={"id": "provider-task-1"})
+        provider.get_task_status = AsyncMock(side_effect=[
+            RuntimeError("temporary status failure 1"),
+            RuntimeError("temporary status failure 2"),
+            RuntimeError("temporary status failure 3"),
+            RuntimeError("temporary status failure 4"),
+            RuntimeError("temporary status failure 5"),
+            RuntimeError("temporary status failure 6"),
+            {"status": "processing"},
+            {"status": "completed", "video_url": "https://example.com/generated.mp4"},
+        ])
+        provider.get_video_content = AsyncMock()
+
+        async with TestSessionLocal() as session:
+            service = CanvasGenerationService(session)
+            with (
+                patch.object(service, "_resolve_api_key", AsyncMock(return_value=fake_api_key)),
+                patch("src.services.canvas.VectorEngineProvider", return_value=provider),
+                patch("src.services.canvas.asyncio.sleep", new_callable=AsyncMock, return_value=None),
+                patch.object(
+                    service,
+                    "_store_remote_video",
+                    AsyncMock(return_value={"object_key": "uploads/generated.mp4", "url": "https://ignored.example.com/generated.mp4"}),
+                ),
+            ):
+                result = await service.process_video_generation(generation_id)
+
+            await session.commit()
+
+        assert result["status"] == "completed"
+
+        async with TestSessionLocal() as session:
+            from src.services.canvas import CanvasService
+
+            canvas_service = CanvasService(session)
+            generation = await canvas_service.get_generation(generation_id)
+            assert generation.status == "completed"
+            assert generation.result_payload_json["result_video_object_key"] == "uploads/generated.mp4"
 
     @pytest.mark.asyncio
     async def test_upload_canvas_video_override(self, client, auth_headers):

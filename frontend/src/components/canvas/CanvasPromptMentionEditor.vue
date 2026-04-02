@@ -7,10 +7,12 @@
         :class="{ 'is-disabled': disabled }"
         contenteditable="true"
         :data-placeholder="promptPlaceholder"
+        @focus="handleEditorFocus"
         @compositionstart="handleEditorCompositionStart"
         @compositionend="handleEditorCompositionEnd"
         @input="handleEditorInput"
         @keydown="handleEditorKeydown"
+        @keyup="handleEditorKeyup"
         @click="handleEditorClick"
         @blur="handleEditorBlur"
         @paste="handleEditorPaste"
@@ -97,6 +99,7 @@ const localTokens = ref([])
 const localTokenSignature = ref('[]')
 const referencePickerPlacement = ref('above')
 const referencePickerMaxHeight = ref(280)
+const mentionQueryFrame = ref(0)
 
 const filteredReferenceItems = computed(() => {
   const keyword = referenceQuery.value.toLowerCase()
@@ -293,6 +296,13 @@ const closeReferencePicker = () => {
   activeReferenceIndex.value = 0
 }
 
+const cancelMentionQueryFrame = () => {
+  if (mentionQueryFrame.value && typeof window !== 'undefined') {
+    window.cancelAnimationFrame(mentionQueryFrame.value)
+  }
+  mentionQueryFrame.value = 0
+}
+
 const updateReferencePickerLayout = () => {
   if (!promptPanelShellRef.value || !showReferencePicker.value) {
     return
@@ -393,6 +403,19 @@ const updateMentionQuery = () => {
   }
 }
 
+const scheduleMentionQueryUpdate = () => {
+  if (typeof window === 'undefined') {
+    updateMentionQuery()
+    return
+  }
+
+  cancelMentionQueryFrame()
+  mentionQueryFrame.value = window.requestAnimationFrame(() => {
+    mentionQueryFrame.value = 0
+    updateMentionQuery()
+  })
+}
+
 const placeCaretAfterNode = (node) => {
   const selection = window.getSelection()
   if (!selection || !node) {
@@ -454,14 +477,15 @@ const handleEditorCompositionStart = () => {
 const handleEditorCompositionEnd = () => {
   isComposing.value = false
   syncLocalTokensFromEditor()
+  scheduleMentionQueryUpdate()
 }
 
 const handleEditorInput = () => {
   if (props.disabled) {
     return
   }
-  updateMentionQuery()
   syncLocalTokensFromEditor()
+  scheduleMentionQueryUpdate()
 }
 
 const handleEditorKeydown = (event) => {
@@ -509,11 +533,12 @@ const handleEditorClick = (event) => {
   if (tokenElement?.dataset?.nodeId) {
     emit('focus-item', tokenElement.dataset.nodeId)
   }
-  updateMentionQuery()
+  scheduleMentionQueryUpdate()
 }
 
 const handleEditorBlur = () => {
   syncLocalTokensFromEditor()
+  cancelMentionQueryFrame()
   setTimeout(() => {
     const activeElement = typeof document !== 'undefined' ? document.activeElement : null
     if (activeElement && activeElement.closest('.reference-picker')) {
@@ -527,6 +552,31 @@ const handleEditorPaste = (event) => {
   event.preventDefault()
   const pastedText = event.clipboardData?.getData('text/plain') || ''
   document.execCommand('insertText', false, pastedText)
+  scheduleMentionQueryUpdate()
+}
+
+const handleEditorFocus = () => {
+  scheduleMentionQueryUpdate()
+}
+
+const handleEditorKeyup = (event) => {
+  if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+    return
+  }
+  scheduleMentionQueryUpdate()
+}
+
+const handleDocumentSelectionChange = () => {
+  const selection = typeof window !== 'undefined' ? window.getSelection() : null
+  if (!selection || selection.rangeCount === 0) {
+    return
+  }
+
+  if (!selectionInsideEditor(selection.anchorNode)) {
+    return
+  }
+
+  scheduleMentionQueryUpdate()
 }
 
 const referenceSummary = (item) => {
@@ -570,6 +620,7 @@ onMounted(async () => {
   await renderEditor(localTokens.value)
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', updateReferencePickerLayout)
+    document.addEventListener('selectionchange', handleDocumentSelectionChange)
   }
 })
 
@@ -577,8 +628,10 @@ onBeforeUnmount(() => {
   if (editableRef.value && !isSyncingEditor.value) {
     flushTokens()
   }
+  cancelMentionQueryFrame()
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', updateReferencePickerLayout)
+    document.removeEventListener('selectionchange', handleDocumentSelectionChange)
   }
 })
 

@@ -9,7 +9,7 @@
     @pointerdown.capture="handleRootPointerDown"
     @focusin="handleRootFocusIn"
   >
-    <div class="floating-header">
+    <div class="floating-header" @mousedown.stop="handleHeaderPointerDown">
       <div class="image-label">
         <el-icon class="icon"><Picture /></el-icon>
         <span>图片节点</span>
@@ -22,7 +22,7 @@
       </button>
     </div>
 
-    <div class="image-preview-card" @click="handlePreviewClick">
+    <div class="image-preview-card" @mousedown.stop="handlePreviewPointerDown" @click="handlePreviewClick">
       <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="canvas preview" />
       <div v-else class="empty-preview">输入提示词或上传参考图</div>
       <CanvasGeneratingOverlay :visible="generating" label="AI 正在生成图像" hint="预计 30 秒至 2 分钟" />
@@ -87,6 +87,39 @@
           </el-select>
         </div>
         <div class="toolbar-right">
+          <div class="toolbar-reference-group">
+            <input
+              ref="styleReferenceInputRef"
+              class="image-upload-input"
+              type="file"
+              accept="image/*"
+              @change="handleStyleReferenceFileChange"
+            />
+            <button
+              class="toolbar-chip-btn"
+              :class="{ 'is-active': hasStyleReference }"
+              :disabled="generating || uploading"
+              :title="hasStyleReference ? styleReferenceLabel : '上传风格参考图'"
+              @click="styleReferenceInputRef?.click()"
+            >
+              <img
+                v-if="draft.styleReferencePreviewUrl"
+                :src="draft.styleReferencePreviewUrl"
+                :alt="styleReferenceLabel"
+                class="style-reference-thumb"
+              />
+              <el-icon v-else><Picture /></el-icon>
+              <span>{{ hasStyleReference ? styleReferenceLabel : '风格参考' }}</span>
+            </button>
+            <button
+              v-if="hasStyleReference"
+              class="toolbar-ghost-btn"
+              :disabled="generating || uploading"
+              @click="$emit('clear-style-reference')"
+            >
+              清除
+            </button>
+          </div>
           <button v-if="draft.resultImageUrl" class="history-action-btn" @click="$emit('history')">历史</button>
           <button class="generate-action-btn" :disabled="!canSubmitPrompt || generating || uploading" @click="handleGenerate">
             <el-icon v-if="generating" class="is-loading"><Loading /></el-icon>
@@ -107,7 +140,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { Delete, Loading, Picture, Plus, Top, Upload } from '@element-plus/icons-vue'
 import CanvasGeneratingOverlay from '@/components/canvas/CanvasGeneratingOverlay.vue'
 import CanvasPromptMentionEditor from '@/components/canvas/CanvasPromptMentionEditor.vue'
@@ -125,14 +158,18 @@ const props = defineProps({
   modelOptionsLoading: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['commit', 'delete', 'focus-item', 'generate', 'handle-drag', 'history', 'update:api-key-id', 'update:model-id', 'update:title', 'update:tokens', 'upload'])
+const emit = defineEmits(['commit', 'delete', 'drag-node', 'focus-item', 'generate', 'handle-drag', 'history', 'update:api-key-id', 'update:model-id', 'update:title', 'update:tokens', 'upload', 'upload-style-reference', 'clear-style-reference'])
 
 const promptEditorRef = ref(null)
 const rootRef = ref(null)
 const fileInputRef = ref(null)
+const styleReferenceInputRef = ref(null)
 const previewDialogVisible = ref(false)
+const pendingPreviewDrag = ref(null)
 const canSubmitPrompt = computed(() => String(props.draft.promptPlainText || '').trim().length > 0)
 const previewUrl = computed(() => props.draft.resultImageUrl || props.draft.referenceImageUrl || '')
+const hasStyleReference = computed(() => Boolean(String(props.draft.styleReferenceObjectKey || '').trim()))
+const styleReferenceLabel = computed(() => String(props.draft.styleReferenceName || '').trim() || '已选择风格参考')
 
 const { handleRootPointerDown, handleRootFocusIn } = useCanvasStudioCommitBoundary(rootRef, () => {
   promptEditorRef.value?.flushTokens?.()
@@ -152,12 +189,82 @@ const handleFileChange = (event) => {
   event.target.value = ''
 }
 
+const handleStyleReferenceFileChange = (event) => {
+  const [file] = event.target.files || []
+  if (file) {
+    emit('upload-style-reference', file)
+  }
+  event.target.value = ''
+}
+
 const handlePreviewClick = () => {
+  if (pendingPreviewDrag.value?.triggered) {
+    pendingPreviewDrag.value = null
+    return
+  }
   if (!previewUrl.value) {
     return
   }
   previewDialogVisible.value = true
 }
+
+const handleHeaderPointerDown = (event) => {
+  const interactiveTarget = event.target.closest('input, button, .el-select, .el-input')
+  if (interactiveTarget) {
+    return
+  }
+  emit('drag-node', event)
+}
+
+const clearPendingPreviewDrag = () => {
+  if (typeof window !== 'undefined' && pendingPreviewDrag.value) {
+    window.removeEventListener('mousemove', handlePreviewPointerMove, true)
+    window.removeEventListener('mouseup', handlePreviewPointerUp, true)
+  }
+  pendingPreviewDrag.value = null
+}
+
+const handlePreviewPointerMove = (event) => {
+  if (!pendingPreviewDrag.value) {
+    return
+  }
+  const deltaX = event.clientX - pendingPreviewDrag.value.startX
+  const deltaY = event.clientY - pendingPreviewDrag.value.startY
+  if (!pendingPreviewDrag.value.triggered && Math.hypot(deltaX, deltaY) >= 5) {
+    pendingPreviewDrag.value = { ...pendingPreviewDrag.value, triggered: true }
+    emit('drag-node', event)
+  }
+}
+
+const handlePreviewPointerUp = () => {
+  const triggered = pendingPreviewDrag.value?.triggered
+  clearPendingPreviewDrag()
+  if (triggered) {
+    window.setTimeout(() => {
+      pendingPreviewDrag.value = null
+    }, 0)
+  }
+}
+
+const handlePreviewPointerDown = (event) => {
+  const interactiveTarget = event.target.closest('button, input, .el-button')
+  if (interactiveTarget) {
+    return
+  }
+  pendingPreviewDrag.value = {
+    startX: event.clientX,
+    startY: event.clientY,
+    triggered: false
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('mousemove', handlePreviewPointerMove, true)
+    window.addEventListener('mouseup', handlePreviewPointerUp, true)
+  }
+}
+
+onBeforeUnmount(() => {
+  clearPendingPreviewDrag()
+})
 </script>
 
 <style scoped>
@@ -186,10 +293,12 @@ const handlePreviewClick = () => {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
+  max-width: min(calc(100vw - 56px), 460px);
   gap: 12px;
   white-space: nowrap;
   padding: 6px 16px;
   border-radius: 999px;
+  cursor: move;
 }
 
 .image-label {
@@ -201,7 +310,8 @@ const handlePreviewClick = () => {
 }
 
 .header-title-input {
-  width: 140px;
+  width: 160px;
+  min-width: 0;
   background: transparent;
   border: none;
   color: #1f2a44;
@@ -242,6 +352,11 @@ const handlePreviewClick = () => {
   justify-content: center;
   position: relative;
   overflow: hidden;
+  cursor: grab;
+}
+
+.image-preview-card:active {
+  cursor: grabbing;
 }
 
 .preview-image {
@@ -287,7 +402,8 @@ const handlePreviewClick = () => {
   bottom: var(--studio-panel-bottom, auto);
   left: 50%;
   transform: translateX(calc(-50% + var(--studio-panel-offset-x, 0px)));
-  width: min(var(--studio-panel-max-width, 620px), calc(100vw - 64px));
+  width: clamp(300px, calc(100vw - 64px), var(--studio-panel-max-width, 620px));
+  min-width: min(var(--studio-panel-min-width, 420px), calc(100vw - 64px));
   max-width: calc(100vw - 64px);
   border-radius: 20px;
   padding: 14px 16px;
@@ -306,22 +422,38 @@ const handlePreviewClick = () => {
 .panel-toolbar {
   margin-top: 14px;
   justify-content: space-between;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .tool-select {
-  width: 170px;
+  width: 156px;
+  min-width: 0;
+}
+
+.toolbar-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toolbar-right {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .generate-action-btn,
-.history-action-btn {
+.history-action-btn,
+.toolbar-chip-btn,
+.toolbar-ghost-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 64px;
+  min-width: 0;
   height: 34px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-radius: 12px;
+  white-space: nowrap;
 }
 
 .generate-action-btn {
@@ -331,8 +463,63 @@ const handlePreviewClick = () => {
 }
 
 .history-action-btn {
-  background: #eef4ff;
+  background: rgba(255, 255, 255, 0.88);
   color: #355ce0;
+  border: 1px solid rgba(75, 120, 255, 0.18);
+}
+
+.toolbar-reference-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 4px 6px;
+  border-radius: 12px;
+  background: rgba(244, 247, 251, 0.92);
+  border: 1px solid rgba(34, 57, 98, 0.08);
+}
+
+.toolbar-chip-btn {
+  gap: 6px;
+  max-width: 144px;
+  background: rgba(238, 244, 255, 0.95);
+  color: #355ce0;
+  border: 1px solid rgba(75, 120, 255, 0.18);
+  padding: 0 10px;
+}
+
+.toolbar-chip-btn.is-active {
+  background: rgba(53, 92, 224, 0.1);
+  border-color: rgba(53, 92, 224, 0.28);
+}
+
+.toolbar-chip-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-ghost-btn {
+  background: rgba(255, 255, 255, 0.88);
+  color: #667085;
+  border: 1px solid rgba(34, 57, 98, 0.12);
+  min-width: auto;
+  padding: 0 10px;
+  flex: 0 0 auto;
+}
+
+.history-action-btn {
+  padding: 0 10px;
+  flex: 0 0 auto;
+}
+
+.style-reference-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex: 0 0 auto;
 }
 
 .panel-delete-btn {
@@ -353,5 +540,46 @@ const handlePreviewClick = () => {
   width: 100%;
   max-height: 80vh;
   object-fit: contain;
+}
+
+@media (max-width: 720px) {
+  .floating-header {
+    gap: 8px;
+    padding: 6px 12px;
+  }
+
+  .header-title-input {
+    width: 120px;
+  }
+
+  .panel-toolbar,
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+  }
+
+  .panel-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .toolbar-left {
+    flex-wrap: wrap;
+  }
+
+  .tool-select {
+    flex: 1 1 160px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .toolbar-right {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .toolbar-reference-group {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>

@@ -64,7 +64,32 @@
       </div>
     </aside>
 
+    <div v-if="showLauncher" class="canvas-launcher">
+      <div class="launcher-chip">
+        <el-icon><MagicStick /></el-icon>
+        <span>从这里开始搭建你的画布</span>
+      </div>
+
+      <div class="launcher-actions">
+        <button class="launcher-action" type="button" :disabled="creatingItem" @click="$emit('create-item', 'text')">
+          文本节点
+        </button>
+        <button class="launcher-action" type="button" :disabled="creatingItem" @click="$emit('create-item', 'image')">
+          图片节点
+        </button>
+        <button class="launcher-action" type="button" :disabled="creatingItem" @click="$emit('create-item', 'video')">
+          视频节点
+        </button>
+      </div>
+    </div>
+
     <div class="zoom-panel">
+      <div class="zoom-panel__controls">
+        <div class="zoom-chip">
+          <el-icon><Operation /></el-icon>
+          <span>{{ zoomText }}</span>
+        </div>
+      </div>
       <div class="zoom-hint">{{ zoomHintText }}</div>
     </div>
 
@@ -75,15 +100,17 @@
 </template>
 
 <script setup>
-import { Document, Picture, Plus, VideoPlay } from '@element-plus/icons-vue'
+import { Document, MagicStick, Operation, Picture, Plus, VideoPlay } from '@element-plus/icons-vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
   saveLabel: { type: String, default: '保存' },
   zoomHintText: { type: String, default: '' },
+  zoomText: { type: String, default: '画布提示' },
   linkModeText: { type: String, default: '' },
   creatingItem: { type: Boolean, default: false },
-  assistantExpanded: { type: Boolean, default: true }
+  assistantExpanded: { type: Boolean, default: true },
+  showLauncher: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['back', 'save', 'create-item'])
@@ -197,6 +224,61 @@ const handleMenuCommand = (command) => {
   pointer-events: auto;
 }
 
+.canvas-launcher {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  z-index: 16;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.launcher-chip,
+.launcher-action,
+.zoom-chip {
+  pointer-events: auto;
+}
+
+.launcher-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(34, 57, 98, 0.08);
+  color: #52607a;
+  box-shadow: 0 12px 30px rgba(34, 57, 98, 0.08);
+  font-size: 13px;
+}
+
+.launcher-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.launcher-action {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 57, 98, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  color: #1f2a44;
+  box-shadow: 0 10px 24px rgba(34, 57, 98, 0.08);
+}
+
+.launcher-action:hover:not(:disabled) {
+  background: #f8fbff;
+  transform: translateY(-1px);
+}
+
 .toolbar-icons-group {
   display: flex;
   flex-direction: column;
@@ -231,7 +313,30 @@ const handleMenuCommand = (command) => {
   left: 14px;
   bottom: 14px;
   z-index: 18;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   pointer-events: none;
+}
+
+.zoom-panel__controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.zoom-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(34, 57, 98, 0.08);
+  color: #52607a;
+  box-shadow: 0 10px 24px rgba(34, 57, 98, 0.08);
+  font-size: 12px;
 }
 
 .zoom-hint {
@@ -260,6 +365,28 @@ const handleMenuCommand = (command) => {
   box-shadow: 0 12px 24px rgba(75, 120, 255, 0.12);
   font-size: 12px;
   pointer-events: auto;
+}
+
+@media (max-width: 960px) {
+  .canvas-topbar {
+    left: 16px;
+    right: 16px;
+  }
+
+  .left-toolbar-panel {
+    left: 12px;
+  }
+
+  .canvas-launcher {
+    left: 24px;
+    right: 24px;
+    bottom: 88px;
+    transform: none;
+  }
+
+  .launcher-actions {
+    width: 100%;
+  }
 }
 </style>
 

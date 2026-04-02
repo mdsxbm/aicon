@@ -35,7 +35,9 @@
         :title="document?.title || 'Canvas'"
         :save-label="saving ? '保存中...' : dirty ? '保存变更' : '已保存'"
         :zoom-hint-text="zoomHintText"
+        :zoom-text="`${Math.round(zoom * 100)}% 视图`"
         :link-mode-text="linkModeText"
+        :show-launcher="!selectedItem"
         @back="router.push('/canvas')"
         @save="handleSave"
         @create-item="createNode"
@@ -53,6 +55,7 @@
         :model-options="textModelOptions"
         :model-options-loading="catalogLoading"
         @focus-item="setSelection"
+        @drag-node="startStudioNodeDrag"
         @handle-drag="handleStudioHandleDrag"
         @update:title="patchSelected({ title: $event })"
         @update:text="patchSelectedContent({ text: $event })"
@@ -75,6 +78,7 @@
         :model-options="imageModelOptions"
         :model-options-loading="catalogLoading"
         @focus-item="setSelection"
+        @drag-node="startStudioNodeDrag"
         @handle-drag="handleStudioHandleDrag"
         @update:title="patchSelected({ title: $event })"
         @update:api-key-id="patchGenerationConfig({ api_key_id: $event })"
@@ -83,6 +87,8 @@
         @generate="handleGenerate"
         @history="refreshHistory"
         @upload="uploadMedia($event, 'image')"
+        @upload-style-reference="uploadStyleReference"
+        @clear-style-reference="clearStyleReference"
         @delete="removeSelectedItem"
       />
 
@@ -90,6 +96,7 @@
         v-if="selectedItem?.item_type === 'video'"
         :style="selectedItemStyle"
         :draft="videoStudioDraft"
+        :status-meta="selectedVideoStatusMeta"
         :available-reference-items="availableReferenceItems"
         :global-reference-items="globalReferenceItems"
         :reference-hint-text="videoReferenceHint"
@@ -99,6 +106,7 @@
         :model-options="videoModelOptions"
         :model-options-loading="catalogLoading"
         @focus-item="setSelection"
+        @drag-node="startStudioNodeDrag"
         @handle-drag="handleStudioHandleDrag"
         @update:title="patchSelected({ title: $event })"
         @update:api-key-id="patchGenerationConfig({ api_key_id: $event })"
@@ -130,6 +138,7 @@ import { useCanvasGeneration } from '@/composables/useCanvasGeneration'
 import { apiKeysService } from '@/services/apiKeys'
 import { canvasService } from '@/services/canvas'
 import { fileService } from '@/services/upload'
+import { resolveCanvasRunStatusMeta } from '@/utils/canvasStageMedia'
 import { buildPromptDerivatives } from '@/utils/promptMentionTokens'
 
 const route = useRoute()
@@ -137,6 +146,8 @@ const router = useRouter()
 const stageShellRef = ref(null)
 const uploading = ref(false)
 const catalogLoading = ref(false)
+const styleReferencePreviewMap = ref({})
+const imageUploadPreviewMap = ref({})
 const apiKeyOptions = ref([])
 const modelCatalog = ref({
   text: [],
@@ -180,6 +191,7 @@ const {
 const viewport = reactive({ width: 0, height: 0 })
 const selectedConnectionId = ref(null)
 const linkDrag = ref(null)
+const studioDrag = ref(null)
 const linkMenu = reactive({
   visible: false,
   screenX: 0,
@@ -212,17 +224,21 @@ const selectedItemStyle = computed(() => {
   const screenWidth = selectedItem.value.width * zoom.value
   const screenHeight = selectedItem.value.height * zoom.value
   const panelWidth = selectedItem.value.item_type === 'text' ? 560 : 620
+  const panelMinWidth = selectedItem.value.item_type === 'text' ? 360 : 420
   const spaceBelow = shellRect ? shellRect.height - (screenTop + screenHeight) - 20 : 0
   const estimatedPanelHeight = selectedItem.value.item_type === 'text' ? 220 : 268
   const shouldPlacePanelAbove = shellRect ? (spaceBelow < estimatedPanelHeight && screenTop > estimatedPanelHeight + 32) : false
   const headerNeedsInset = shellRect ? screenTop < 64 : false
   let panelOffsetX = 0
   if (shellRect) {
-    const safeWidth = Math.min(panelWidth, shellRect.width - 32)
+    const safeWidth = Math.max(panelMinWidth, Math.min(panelWidth, shellRect.width - 32))
     const centeredLeft = screenLeft + screenWidth / 2 - safeWidth / 2
     const clampedLeft = Math.min(Math.max(centeredLeft, 16), Math.max(16, shellRect.width - safeWidth - 16))
     panelOffsetX = clampedLeft - centeredLeft
   }
+  const computedPanelMaxWidth = shellRect
+    ? Math.max(panelMinWidth, Math.min(panelWidth, shellRect.width - 32))
+    : panelWidth
   return {
     position: 'absolute',
     left: '0',
@@ -234,7 +250,8 @@ const selectedItemStyle = computed(() => {
     '--studio-panel-top': shouldPlacePanelAbove ? 'auto' : 'calc(100% + 22px)',
     '--studio-panel-bottom': shouldPlacePanelAbove ? 'calc(100% + 18px)' : 'auto',
     '--studio-panel-offset-x': `${panelOffsetX}px`,
-    '--studio-panel-max-width': `${Math.max(320, Math.min(panelWidth, (shellRect?.width || panelWidth) - 32))}px`,
+    '--studio-panel-max-width': `${computedPanelMaxWidth}px`,
+    '--studio-panel-min-width': `${Math.min(panelMinWidth, Math.max(280, (shellRect?.width || panelMinWidth) - 32))}px`,
     '--studio-header-top': headerNeedsInset ? '12px' : '-48px'
   }
 })
@@ -271,10 +288,16 @@ const textStudioDraft = computed(() => {
 
 const imageStudioDraft = computed(() => {
   if (!selectedItem.value) return {}
+  const styleReferenceObjectKey = resolveStyleReferenceImageObjectKey(selectedItem.value.content)
+  const styleReferencePreview = styleReferencePreviewMap.value[selectedItem.value.id] || {}
+  const uploadPreview = imageUploadPreviewMap.value[selectedItem.value.id] || ''
   return {
     title: selectedItem.value.title || '',
-    resultImageUrl: selectedItem.value.content?.result_image_url || '',
-    referenceImageUrl: selectedItem.value.content?.reference_image_url || '',
+    resultImageUrl: resolveImagePreviewUrl(selectedItem.value.content, uploadPreview),
+    referenceImageUrl: resolveImagePreviewUrl(selectedItem.value.content, uploadPreview),
+    styleReferenceObjectKey,
+    styleReferenceName: styleReferencePreview.name || (styleReferenceObjectKey ? '已选择风格参考' : ''),
+    styleReferencePreviewUrl: styleReferencePreview.url || '',
     apiKeyId: selectedItem.value.generation_config?.api_key_id || '',
     model: selectedItem.value.generation_config?.model || '',
     ...normalizePromptTokens(resolveInitialPromptTokens(selectedItem.value))
@@ -290,6 +313,13 @@ const videoStudioDraft = computed(() => {
     model: selectedItem.value.generation_config?.model || '',
     ...normalizePromptTokens(resolveInitialPromptTokens(selectedItem.value))
   }
+})
+
+const selectedVideoStatusMeta = computed(() => {
+  if (!selectedItem.value || selectedItem.value.item_type !== 'video') {
+    return null
+  }
+  return resolveCanvasRunStatusMeta(selectedItem.value)
 })
 
 const textModelOptions = computed(() => modelCatalog.value.text || [])
@@ -308,9 +338,42 @@ const reverseConnectionMap = computed(() => {
 
 const buildReferenceItem = (item) => ({
   ...item,
-  previewUrl: item.item_type === 'image' ? (item.content?.result_image_url || item.content?.reference_image_url || '') : '',
+  previewUrl: item.item_type === 'image' ? resolveImagePreviewUrl(item.content, imageUploadPreviewMap.value[item.id] || '') : '',
   previewText: item.item_type === 'text' ? String(item.content?.text || '') : ''
 })
+
+const resolveImageReferenceObjectKey = (content = {}) =>
+  String(
+    content?.result_image_object_key ||
+    content?.reference_image_object_key ||
+    content?.result_image_key ||
+    content?.object_key ||
+    content?.objectKey ||
+    ''
+  ).trim()
+
+const resolveStyleReferenceImageObjectKey = (content = {}) =>
+  String(
+    content?.style_reference_image_object_key ||
+    content?.reference_image_object_key ||
+    content?.reference_image_key ||
+    ''
+  ).trim()
+
+const resolveImagePreviewUrl = (content = {}, sessionPreviewUrl = '') => {
+  const resultObjectKey = String(content?.result_image_object_key || content?.result_image_key || '').trim()
+  const referenceObjectKey = String(content?.reference_image_object_key || content?.reference_image_key || '').trim()
+  const resultUrl = String(content?.result_image_url || '').trim()
+  const referenceUrl = String(content?.reference_image_url || '').trim()
+
+  if (resultObjectKey && resultUrl) {
+    return resultUrl
+  }
+  if (referenceObjectKey && referenceUrl) {
+    return referenceUrl
+  }
+  return String(sessionPreviewUrl || '').trim()
+}
 
 const hydrateCanvasConfigCatalog = async () => {
   catalogLoading.value = true
@@ -384,15 +447,9 @@ const resolvePromptMentions = (tokens = [], itemMap = {}) =>
           item.content?.result_image_key ||
           item.content?.object_key ||
           item.content?.objectKey ||
-          item.content?.result_image_url ||
-          item.content?.reference_image_url ||
           ''
         )
-        const previewUrl = String(
-          item.content?.result_image_url ||
-          item.content?.reference_image_url ||
-          ''
-        )
+        const previewUrl = resolveImagePreviewUrl(item.content, imageUploadPreviewMap.value[item.id] || '')
         return {
           mentionId: token.mentionId,
           nodeId: token.nodeId,
@@ -504,6 +561,11 @@ const getCanvasPointFromMouse = (event) => {
   }
 }
 
+const clampCanvasPosition = (x, y) => ({
+  x: Math.max(0, Number(x || 0)),
+  y: Math.max(0, Number(y || 0))
+})
+
 const resolveHandleCanvasPoint = (item, handle) => ({
   x: handle === 'left' ? item.position_x : item.position_x + item.width,
   y: item.position_y + item.height / 2
@@ -549,44 +611,66 @@ const startLinkDrag = (item, handle, event) => {
 }
 
 const handleGlobalPointerMove = (event) => {
-  if (!linkDrag.value) return
   const point = getCanvasPointFromMouse(event)
-  linkDrag.value = {
-    ...linkDrag.value,
-    currentScreenX: point.screenX,
-    currentScreenY: point.screenY,
-    currentCanvasX: point.canvasX,
-    currentCanvasY: point.canvasY
+
+  if (linkDrag.value) {
+    linkDrag.value = {
+      ...linkDrag.value,
+      currentScreenX: point.screenX,
+      currentScreenY: point.screenY,
+      currentCanvasX: point.canvasX,
+      currentCanvasY: point.canvasY
+    }
+  }
+
+  if (studioDrag.value) {
+    const nextPosition = clampCanvasPosition(
+      point.canvasX - studioDrag.value.pointerOffsetX,
+      point.canvasY - studioDrag.value.pointerOffsetY
+    )
+    updateItem(studioDrag.value.itemId, {
+      position_x: nextPosition.x,
+      position_y: nextPosition.y
+    })
   }
 }
 
 const handleGlobalPointerUp = async () => {
-  if (!linkDrag.value) return
-  const sourceItemId = linkDrag.value.sourceItemId
-  const sourceHandle = linkDrag.value.sourceHandle
-  const targetItem = findItemAtCanvasPoint(linkDrag.value.currentCanvasX, linkDrag.value.currentCanvasY, sourceItemId)
-  try {
-    if (targetItem) {
-      const targetHandle = linkDrag.value.currentCanvasX < targetItem.position_x + targetItem.width / 2 ? 'left' : 'right'
-      startConnection(sourceItemId, sourceHandle)
-      await completeConnection(targetItem.id, targetHandle)
-      setSelection(targetItem.id)
-    } else {
-      linkMenu.visible = true
-      linkMenu.screenX = linkDrag.value.currentScreenX
-      linkMenu.screenY = linkDrag.value.currentScreenY
-      linkMenu.canvasX = linkDrag.value.currentCanvasX
-      linkMenu.canvasY = linkDrag.value.currentCanvasY
-      linkMenu.sourceItemId = sourceItemId
-      linkMenu.sourceHandle = sourceHandle
-    }
-  } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || '创建连线失败')
-  } finally {
-    linkDrag.value = null
-    window.removeEventListener('mousemove', handleGlobalPointerMove)
-    window.removeEventListener('mouseup', handleGlobalPointerUp)
+  if (studioDrag.value) {
+    studioDrag.value = null
   }
+
+  if (linkDrag.value) {
+    const sourceItemId = linkDrag.value.sourceItemId
+    const sourceHandle = linkDrag.value.sourceHandle
+    const targetItem = findItemAtCanvasPoint(linkDrag.value.currentCanvasX, linkDrag.value.currentCanvasY, sourceItemId)
+    try {
+      if (targetItem) {
+        const targetHandle = linkDrag.value.currentCanvasX < targetItem.position_x + targetItem.width / 2 ? 'left' : 'right'
+        startConnection(sourceItemId, sourceHandle)
+        await completeConnection(targetItem.id, targetHandle)
+        setSelection(targetItem.id)
+      } else {
+        linkMenu.visible = true
+        linkMenu.screenX = linkDrag.value.currentScreenX
+        linkMenu.screenY = linkDrag.value.currentScreenY
+        linkMenu.canvasX = linkDrag.value.currentCanvasX
+        linkMenu.canvasY = linkDrag.value.currentCanvasY
+        linkMenu.sourceItemId = sourceItemId
+        linkMenu.sourceHandle = sourceHandle
+      }
+    } catch (error) {
+      ElMessage.error(error?.response?.data?.detail || error?.message || '创建连线失败')
+    } finally {
+      linkDrag.value = null
+      window.removeEventListener('mousemove', handleGlobalPointerMove)
+      window.removeEventListener('mouseup', handleGlobalPointerUp)
+    }
+    return
+  }
+
+  window.removeEventListener('mousemove', handleGlobalPointerMove)
+  window.removeEventListener('mouseup', handleGlobalPointerUp)
 }
 
 const patchSelected = (patch) => {
@@ -712,6 +796,22 @@ const handleStudioHandleDrag = (event, handle) => {
   startLinkDrag(selectedItem.value, handle, event)
 }
 
+const startStudioNodeDrag = (event) => {
+  if (!selectedItem.value) {
+    return
+  }
+
+  const point = getCanvasPointFromMouse(event)
+  studioDrag.value = {
+    itemId: selectedItem.value.id,
+    pointerOffsetX: point.canvasX - selectedItem.value.position_x,
+    pointerOffsetY: point.canvasY - selectedItem.value.position_y
+  }
+  closeLinkMenu()
+  window.addEventListener('mousemove', handleGlobalPointerMove)
+  window.addEventListener('mouseup', handleGlobalPointerUp)
+}
+
 const handleSelectionBoxEnd = ({ bounds, appendToSelection }) => {
   const hitItem = items.value.find((item) =>
     item.position_x < bounds.right &&
@@ -753,6 +853,19 @@ const buildGenerationPayload = (item) => {
         .filter((reference) => reference.nodeType === 'text' && reference.status === 'resolved')
         .map((reference) => reference.nodeId)
     })
+  } else if (item.item_type === 'image') {
+    const upstreamImageObjectKeys = resolvedMentions
+      .filter((reference) => reference.nodeType === 'image' && reference.status === 'resolved')
+      .map((reference) => resolveImageReferenceObjectKey(reference.resolvedContent))
+      .filter(Boolean)
+    const styleReferenceImageObjectKey = resolveStyleReferenceImageObjectKey(content)
+    payload.options = {}
+    if (upstreamImageObjectKeys.length) {
+      payload.options.reference_image_object_keys = upstreamImageObjectKeys
+    }
+    if (styleReferenceImageObjectKey) {
+      payload.options.style_reference_image_object_key = styleReferenceImageObjectKey
+    }
   }
 
   return payload
@@ -780,20 +893,29 @@ const uploadMedia = async (file, type) => {
       const formData = new FormData()
       formData.append('file', file)
       const response = await fileService.uploadFile(formData)
+      const objectKey = response?.storage_info?.object_key || response?.data?.storage_key || ''
       const fileUrl =
         response?.storage_info?.url ||
         response?.data?.url ||
-        response?.storage_info?.object_key ||
-        response?.data?.storage_key ||
         ''
-      if (!fileUrl) {
-        ElMessage.warning('上传成功，但没有拿到可预览地址')
+      if (!objectKey) {
+        ElMessage.warning('上传成功，但没有拿到图片存储键')
         return
       }
+      if (fileUrl) {
+        imageUploadPreviewMap.value = {
+          ...imageUploadPreviewMap.value,
+          [selectedItem.value.id]: fileUrl
+        }
+        updateItem(selectedItem.value.id, {
+          content: {
+            reference_image_object_key: objectKey,
+            reference_image_url: fileUrl
+          }
+        }, { persist: false })
+      }
       patchSelectedContent({
-        reference_image_object_key: response?.storage_info?.object_key || response?.data?.storage_key || '',
-        reference_image_url: fileUrl,
-        result_image_url: selectedItem.value.content?.result_image_url || fileUrl
+        reference_image_object_key: objectKey
       })
     } else {
       const formDataForCanvas = new FormData()
@@ -813,6 +935,45 @@ const uploadMedia = async (file, type) => {
   }
 }
 
+const uploadStyleReference = async (file) => {
+  if (!selectedItem.value || selectedItem.value.item_type !== 'image' || !file) return
+  uploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fileService.uploadFile(formData)
+    const objectKey = response?.storage_info?.object_key || response?.data?.storage_key || ''
+    const previewUrl = response?.storage_info?.url || response?.data?.url || ''
+    if (!objectKey) {
+      ElMessage.warning('上传成功，但没有拿到风格参考图存储键')
+      return
+    }
+    styleReferencePreviewMap.value = {
+      ...styleReferencePreviewMap.value,
+      [selectedItem.value.id]: {
+        name: file.name || '已选择风格参考',
+        url: previewUrl
+      }
+    }
+    patchSelectedContent({
+      style_reference_image_object_key: objectKey
+    })
+    ElMessage.success('风格参考图已上传')
+  } finally {
+    uploading.value = false
+  }
+}
+
+const clearStyleReference = () => {
+  if (!selectedItem.value || selectedItem.value.item_type !== 'image') return
+  const nextPreviewMap = { ...styleReferencePreviewMap.value }
+  delete nextPreviewMap[selectedItem.value.id]
+  styleReferencePreviewMap.value = nextPreviewMap
+  patchSelectedContent({
+    style_reference_image_object_key: ''
+  })
+}
+
 const refreshHistory = async () => {
   if (!selectedItem.value?.id) return
   await loadHistory(selectedItem.value.id)
@@ -821,6 +982,12 @@ const refreshHistory = async () => {
 const removeSelectedItem = async () => {
   if (!selectedItem.value) return
   try {
+    const nextPreviewMap = { ...styleReferencePreviewMap.value }
+    delete nextPreviewMap[selectedItem.value.id]
+    styleReferencePreviewMap.value = nextPreviewMap
+    const nextImagePreviewMap = { ...imageUploadPreviewMap.value }
+    delete nextImagePreviewMap[selectedItem.value.id]
+    imageUploadPreviewMap.value = nextImagePreviewMap
     await removeItem(selectedItem.value.id)
     selectedConnectionId.value = null
     closeLinkMenu()
@@ -850,6 +1017,8 @@ watch(
   () => route.params.canvasId,
   async (canvasId) => {
     if (canvasId) {
+      styleReferencePreviewMap.value = {}
+      imageUploadPreviewMap.value = {}
       await loadDocument(canvasId)
     }
   },

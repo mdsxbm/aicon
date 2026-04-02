@@ -1,6 +1,26 @@
 import { onBeforeUnmount, reactive } from 'vue'
 import { canvasService } from '@/services/canvas'
 
+const WAITING_RUN_STATUSES = new Set(['pending', 'processing', 'running', 'queued', 'submitted'])
+const MEDIA_URL_TO_OBJECT_KEY_FIELDS = {
+  result_image_url: 'result_image_object_key',
+  reference_image_url: 'reference_image_object_key',
+  result_video_url: 'result_video_object_key'
+}
+
+const normalizeRunStatus = (status, fallback = 'processing') => {
+  const normalized = String(status || '').trim().toLowerCase()
+  if (WAITING_RUN_STATUSES.has(normalized)) {
+    return normalized === 'running' ? 'processing' : normalized
+  }
+  if (normalized === 'completed' || normalized === 'failed') {
+    return normalized
+  }
+  return fallback
+}
+
+const isWaitingRunStatus = (status) => WAITING_RUN_STATUSES.has(String(status || '').trim().toLowerCase())
+
 const applyGenerationResultToContent = (itemType, currentContent = {}, resultPayload = {}) => {
   const nextContent = { ...currentContent }
   if (itemType === 'text' && resultPayload.text) {
@@ -19,6 +39,19 @@ const applyGenerationResultToContent = (itemType, currentContent = {}, resultPay
     nextContent.task_id = resultPayload.task_id
   }
   return nextContent
+}
+
+const stripTransientMediaUrls = (payload = {}) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return payload
+  }
+  const sanitized = { ...payload }
+  Object.entries(MEDIA_URL_TO_OBJECT_KEY_FIELDS).forEach(([urlField, objectKeyField]) => {
+    if (sanitized[objectKeyField]) {
+      delete sanitized[urlField]
+    }
+  })
+  return sanitized
 }
 
 export function useCanvasGeneration(updateItem) {
@@ -57,10 +90,10 @@ export function useCanvasGeneration(updateItem) {
 
   const syncItemFromGeneration = (item, generation) => {
     updateItem(item.id, {
-      content: applyGenerationResultToContent(item.item_type, item.content, generation.result_payload || {}),
+      content: stripTransientMediaUrls(applyGenerationResultToContent(item.item_type, item.content, generation.result_payload || {})),
       last_run_status: generation.status,
       last_run_error: generation.error_message || null,
-      last_output: generation.result_payload || {},
+      last_output: stripTransientMediaUrls(generation.result_payload || {}),
       is_persisted: true
     })
   }
@@ -147,7 +180,7 @@ export function useCanvasGeneration(updateItem) {
         buffer = processSseBuffer(buffer, ({ event, data }) => {
           if (event === 'start') {
             updateItem(item.id, {
-              last_run_status: data.status || 'processing',
+              last_run_status: normalizeRunStatus(data.status, 'processing'),
               last_run_error: null
             }, { persist: false })
             return
@@ -158,7 +191,7 @@ export function useCanvasGeneration(updateItem) {
               content: {
                 text: data.text || ''
               },
-              last_run_status: data.status || 'processing',
+              last_run_status: normalizeRunStatus(data.status, 'processing'),
               last_run_error: null
             }, { persist: false })
             return
@@ -171,11 +204,11 @@ export function useCanvasGeneration(updateItem) {
               ...(state.histories[item.id] || []).filter((entry) => entry.id !== data.generation?.id)
             ].filter(Boolean)
             updateItem(item.id, {
-              content: data.item?.content || { text: data.text || '' },
+              content: stripTransientMediaUrls(data.item?.content || { text: data.text || '' }),
               generation_config: data.item?.generation_config || item.generation_config,
-              last_run_status: data.item?.last_run_status || data.status || 'completed',
+              last_run_status: 'completed',
               last_run_error: null,
-              last_output: data.item?.last_output || data.generation?.result_payload || { text: data.text || '' },
+              last_output: stripTransientMediaUrls(data.item?.last_output || data.generation?.result_payload || { text: data.text || '' }),
               is_persisted: true
             })
             return
@@ -246,19 +279,20 @@ export function useCanvasGeneration(updateItem) {
         buffer = processSseBuffer(buffer, ({ event, data }) => {
           if (event === 'start') {
             updateItem(item.id, {
-              last_run_status: data.status || 'processing',
+              last_run_status: normalizeRunStatus(data.status, 'processing'),
               last_run_error: null
             }, { persist: false })
             return
           }
 
           if (event === 'progress') {
+            const nextStatus = normalizeRunStatus(data.status, item.last_run_status || 'processing')
             updateItem(item.id, {
               content: applyGenerationResultToContent(item.item_type, item.content, {
                 provider_task_id: data.provider_task_id,
                 task_id: data.generation_id
               }),
-              last_run_status: data.status || 'processing',
+              last_run_status: nextStatus,
               last_run_error: null,
               last_output: data.provider_payload || item.last_output || {}
             }, { persist: false })
@@ -272,17 +306,25 @@ export function useCanvasGeneration(updateItem) {
               ...(state.histories[item.id] || []).filter((entry) => entry.id !== data.generation?.id)
             ].filter(Boolean)
             updateItem(item.id, {
-              content: data.item?.content || applyGenerationResultToContent(item.item_type, item.content, data.generation?.result_payload || {}),
+              content: stripTransientMediaUrls(data.item?.content || applyGenerationResultToContent(item.item_type, item.content, data.generation?.result_payload || {})),
               generation_config: data.item?.generation_config || item.generation_config,
-              last_run_status: data.item?.last_run_status || data.status || 'completed',
+              last_run_status: 'completed',
               last_run_error: null,
-              last_output: data.item?.last_output || data.generation?.result_payload || {},
+              last_output: stripTransientMediaUrls(data.item?.last_output || data.generation?.result_payload || {}),
               is_persisted: true
             })
             return
           }
 
           if (event === 'fail') {
+            if (isWaitingRunStatus(data.status) || data.transient_status_issue === true) {
+              updateItem(item.id, {
+                last_run_status: normalizeRunStatus(data.status, item.last_run_status || 'processing'),
+                last_run_error: null,
+                last_output: data.provider_payload || item.last_output || {}
+              }, { persist: false })
+              return
+            }
             throw new Error(data.error_message || `${item.item_type === 'image' ? '图片' : '视频'}生成失败`)
           }
         })
@@ -323,11 +365,11 @@ export function useCanvasGeneration(updateItem) {
   const applyGeneration = async (itemId, generationId) => {
     const response = await canvasService.applyGeneration(itemId, generationId)
     updateItem(itemId, {
-      content: response.item.content,
+      content: stripTransientMediaUrls(response.item.content),
       generation_config: response.item.generation_config,
       last_run_status: response.item.last_run_status,
       last_run_error: response.item.last_run_error,
-      last_output: response.item.last_output,
+      last_output: stripTransientMediaUrls(response.item.last_output),
       is_persisted: true
     })
     await loadHistory(itemId)

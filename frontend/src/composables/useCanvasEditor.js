@@ -3,7 +3,7 @@ import { canvasService } from '@/services/canvas'
 
 const DEFAULT_CONTENT = {
   text: () => ({ text: '', text_preview: '', prompt: '', promptTokens: [] }),
-  image: () => ({ prompt: '', result_image_url: '', reference_image_url: '', promptTokens: [] }),
+  image: () => ({ prompt: '', result_image_url: '', reference_image_url: '', style_reference_image_object_key: '', promptTokens: [] }),
   video: () => ({ prompt: '', result_video_url: '', reference_image_urls: [], reference_text_ids: [], promptTokens: [] })
 }
 
