@@ -1,5 +1,5 @@
 # Docker 镜像构建和推送脚本 (Windows PowerShell)
-# 用法: .\build-and-push.ps1 [-Version "v1.0.0"]
+# 用法: .\scripts\build-and-push.ps1 -version "v1.3.0"
 
 param(
     [string]$Version = "latest"
