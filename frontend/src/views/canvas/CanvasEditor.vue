@@ -39,7 +39,13 @@
         :show-launcher="!selectedItem"
         @back="router.push('/canvas')"
         @create-item="createNode"
-      />
+      >
+        <CanvasAssistant
+          :document-id="assistantDocumentId"
+          :selected-item-ids="selectedItemIds"
+          :refresh-canvas="handleAssistantMutationApplied"
+        />
+      </CanvasWorkbenchLayout>
 
       <CanvasTextStudio
         v-if="selectedItem?.item_type === 'text'"
@@ -152,10 +158,11 @@
   import { ElMessage } from 'element-plus'
   import CanvasConnectionActions from '@/components/canvas/CanvasConnectionActions.vue'
   import CanvasGenerationHistoryDrawer from '@/components/canvas/CanvasGenerationHistoryDrawer.vue'
-  import CanvasImageStudio from '@/components/canvas/CanvasImageStudio.vue'
-  import CanvasLinkCreateMenu from '@/components/canvas/CanvasLinkCreateMenu.vue'
-  import CanvasLinkDragOverlay from '@/components/canvas/CanvasLinkDragOverlay.vue'
-  import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
+import CanvasImageStudio from '@/components/canvas/CanvasImageStudio.vue'
+import CanvasLinkCreateMenu from '@/components/canvas/CanvasLinkCreateMenu.vue'
+import CanvasLinkDragOverlay from '@/components/canvas/CanvasLinkDragOverlay.vue'
+import CanvasAssistant from '@/components/canvas/assistant/CanvasAssistant.vue'
+import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
   import CanvasVideoStudio from '@/components/canvas/CanvasVideoStudio.vue'
   import CanvasWorkbenchLayout from '@/components/canvas/CanvasWorkbenchLayout.vue'
   import KonvaCanvasStage from '@/components/canvas/KonvaCanvasStage.vue'
@@ -255,6 +262,9 @@
   const selectedItemIds = computed(() =>
     selectedItem.value ? [selectedItem.value.id] : []
   )
+  const assistantDocumentId = computed(() =>
+    String(document.value?.id || route.params.canvasId || '').trim()
+  )
   const selectedConnectionIds = computed(() =>
     selectedConnectionId.value ? [selectedConnectionId.value] : []
   )
@@ -264,6 +274,30 @@
         (connection) => connection.id === selectedConnectionId.value
       ) || null
   )
+
+  const handleAssistantMutationApplied = async ({ documentId, selectedItemIds: nextSelectedItemIds = [] } = {}) => {
+    const targetDocumentId = String(documentId || assistantDocumentId.value || '').trim()
+    if (!targetDocumentId) {
+      return
+    }
+    const preservedSelectionId =
+      nextSelectedItemIds.find((itemId) => items.value.some((item) => item.id === itemId)) ||
+      selectedItem.value?.id ||
+      ''
+    const preservedConnectionId = selectedConnectionId.value
+    syncSelectedStudioDraft()
+    await loadDocument(targetDocumentId)
+    if (preservedSelectionId && items.value.some((item) => item.id === preservedSelectionId)) {
+      setSelection(preservedSelectionId)
+    } else {
+      clearSelection()
+    }
+    if (preservedConnectionId && connections.value.some((connection) => connection.id === preservedConnectionId)) {
+      selectedConnectionId.value = preservedConnectionId
+    } else {
+      selectedConnectionId.value = null
+    }
+  }
 
   const selectedItemStyle = computed(() => {
     if (!selectedItem.value) {

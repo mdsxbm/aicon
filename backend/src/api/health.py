@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 
 import psutil
-import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +15,11 @@ from src.core.database import get_db
 from src.core.logging import logger
 
 router = APIRouter()
+
+try:
+    import redis.asyncio as redis  # type: ignore
+except Exception:  # pragma: no cover
+    redis = None
 
 
 @router.get("/")
@@ -54,6 +58,8 @@ async def database_health(db: AsyncSession = Depends(get_db)):
 @router.get("/redis")
 async def redis_health():
     """Redis连接检查"""
+    if redis is None:
+        raise HTTPException(status_code=503, detail="Redis client unavailable")
     try:
         # 创建Redis连接
         redis_client = redis.from_url(settings.REDIS_URL)

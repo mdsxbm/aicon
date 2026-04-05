@@ -1,0 +1,2 @@
+"""Canvas assistant package."""
+

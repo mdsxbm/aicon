@@ -125,6 +125,11 @@ from .video_task import (
     VideoTaskRetryResponse,
     VideoTaskStatsResponse,
 )
+from .canvas_assistant import (
+    CanvasAssistantChatRequest,
+    CanvasAssistantResumeRequest,
+    CanvasAssistantTurnResponse,
+)
 
 __all__ = [
     # 认证
@@ -213,4 +218,7 @@ __all__ = [
     "VideoTaskStatsResponse",
     "VideoTaskDeleteResponse",
     "VideoTaskRetryResponse",
+    "CanvasAssistantChatRequest",
+    "CanvasAssistantResumeRequest",
+    "CanvasAssistantTurnResponse",
 ]
