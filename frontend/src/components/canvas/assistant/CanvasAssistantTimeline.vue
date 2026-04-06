@@ -4,7 +4,7 @@
       <div v-if="!items.length" class="assistant-timeline__empty">
         <div class="assistant-timeline__empty-title">从一句话开始</div>
         <div class="assistant-timeline__empty-hint">
-          先给我一句创意、一个剧本想法，或者告诉我要从哪一步开始。我会按视频工作流一步一步带你往下走。
+          先给我一句创意、一个剧本想法，或者告诉我要从哪一步开始。我会按视频工作流一步一步帮你把节点创建好，后续生成由你在画布里手动触发。
         </div>
         <div class="assistant-timeline__empty-example">
           比如：做一个像《沙丘》一样的史诗感荒漠预告片，画面是低饱和赭石与废土沙色调，强调 70MM IMAX 胶片感和长焦压缩空间。

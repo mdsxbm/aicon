@@ -237,8 +237,15 @@ export function useCanvasEditor() {
     }
   }
 
-  const createItem = async (itemType, position = {}) => {
+  const createItem = async (itemType, options = {}) => {
     if (!currentDocumentId) return null
+    const position = options?.position || options || {}
+    const initialGenerationConfig =
+      options?.generation_config &&
+      typeof options.generation_config === 'object' &&
+      !Array.isArray(options.generation_config)
+        ? options.generation_config
+        : {}
     const count = items.value.filter(
       (item) => item.item_type === itemType
     ).length
@@ -257,8 +264,10 @@ export function useCanvasEditor() {
       height: size.height,
       z_index: maxZIndex.value + 1,
       content: DEFAULT_CONTENT[itemType](),
-      generation_config:
-        itemType === 'video' ? { aspectRatio: DEFAULT_ASPECT_RATIO } : {},
+      generation_config: {
+        ...(itemType === 'video' ? { aspectRatio: DEFAULT_ASPECT_RATIO } : {}),
+        ...initialGenerationConfig
+      },
       last_run_status: 'idle',
       last_run_error: null,
       last_output: {}

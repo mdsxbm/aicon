@@ -452,12 +452,38 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
   const textModelOptions = computed(() => modelCatalog.value.text || [])
   const imageModelOptions = computed(() => modelCatalog.value.image || [])
   const videoModelOptions = computed(() => modelCatalog.value.video || [])
+  const defaultCanvasApiKeyId = computed(
+    () => String(apiKeyOptions.value[0]?.value || '').trim()
+  )
+  const defaultImageModel = computed(
+    () => String(imageModelOptions.value[0] || '').trim()
+  )
+  const defaultVideoModel = computed(
+    () => String(videoModelOptions.value[0] || '').trim()
+  )
   const imageAspectRatioOptions = IMAGE_ASPECT_RATIO_OPTIONS
   const videoAspectRatioOptions = computed(() =>
     getSupportedVideoAspectRatios(
       selectedItem.value?.generation_config?.model || ''
     )
   )
+
+  const buildDefaultGenerationConfig = (type) => {
+    if (type !== 'image' && type !== 'video') {
+      return {}
+    }
+    const apiKeyId = defaultCanvasApiKeyId.value
+    const model =
+      type === 'image' ? defaultImageModel.value : defaultVideoModel.value
+    const config = {}
+    if (apiKeyId) {
+      config.api_key_id = apiKeyId
+    }
+    if (model) {
+      config.model = model
+    }
+    return config
+  }
   const historyTargetItem = computed(
     () =>
       items.value.find((item) => item.id === historyTargetItemId.value) || null
@@ -715,7 +741,7 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
 
   const zoomHintText = computed(
     () =>
-      `缩放 ${Math.round(zoom.value * 100)}%，拖动画布平移，按住 Shift 拖拽框选节点。`
+      `缩放 ${Math.round(zoom.value * 100)}%，左键拖动画布平移，按住 Shift 左键拖拽框选节点。`
   )
   const linkModeText = computed(() => {
     if (!linkDrag.value) return ''
@@ -935,7 +961,9 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
   const createNode = async (type) => {
     try {
       syncSelectedStudioDraft()
-      const item = await createItem(type)
+      const item = await createItem(type, {
+        generation_config: buildDefaultGenerationConfig(type)
+      })
       closeLinkMenu()
       if (item?.id) {
         await setSelectionWithDraftSync(item.id)
@@ -951,8 +979,11 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
     try {
       syncSelectedStudioDraft()
       const item = await createItem(type, {
-        position_x: Math.max(40, linkMenu.canvasX),
-        position_y: Math.max(40, linkMenu.canvasY)
+        position: {
+          position_x: Math.max(40, linkMenu.canvasX),
+          position_y: Math.max(40, linkMenu.canvasY)
+        },
+        generation_config: buildDefaultGenerationConfig(type)
       })
       if (!item?.id) {
         return

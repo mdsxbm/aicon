@@ -457,7 +457,12 @@ const handlePointerDown = (event) => {
     return
   }
 
-  if (target === stage && (nativeEvent?.button ?? 0) === 0) {
+  const isPrimaryButton = (nativeEvent?.button ?? 0) === 0
+  const isShiftMarquee = Boolean(
+    isPrimaryButton && nativeEvent?.shiftKey
+  )
+
+  if (target === stage && isShiftMarquee) {
     nativeEvent?.preventDefault?.()
     const pointer = stage.getPointerPosition()
     if (!pointer) {
@@ -477,6 +482,10 @@ const handlePointerDown = (event) => {
   }
 
   if (target === stage) {
+    if (isPrimaryButton) {
+      stage.draggable(true)
+      return
+    }
     nativeEvent?.preventDefault?.()
     return
   }

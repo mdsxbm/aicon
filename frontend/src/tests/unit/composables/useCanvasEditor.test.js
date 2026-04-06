@@ -183,4 +183,53 @@ describe('useCanvasEditor item merging', () => {
 
     app.unmount()
   })
+
+  it('applies initial image or video generation defaults when creating a node', async () => {
+    canvasService.createItem.mockResolvedValue({
+      id: 'item-9',
+      item_type: 'image',
+      title: '图片节点 1',
+      position_x: 120,
+      position_y: 120,
+      width: 340,
+      height: 280,
+      z_index: 1,
+      content: { prompt: '', promptTokens: [] },
+      generation_config: {
+        api_key_id: 'key-1',
+        model: 'image-model-1'
+      },
+      last_run_status: 'idle',
+      last_run_error: null,
+      last_output: {}
+    })
+    canvasService.getLite.mockResolvedValue({
+      document: { id: 'doc-1', title: 'Canvas' },
+      items: [],
+      connections: []
+    })
+
+    const { app, composable } = mountComposable()
+    await composable.loadDocument('doc-1')
+    await nextTick()
+
+    await composable.createItem('image', {
+      generation_config: {
+        api_key_id: 'key-1',
+        model: 'image-model-1'
+      }
+    })
+
+    expect(canvasService.createItem).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({
+        generation_config: {
+          api_key_id: 'key-1',
+          model: 'image-model-1'
+        }
+      })
+    )
+
+    app.unmount()
+  })
 })

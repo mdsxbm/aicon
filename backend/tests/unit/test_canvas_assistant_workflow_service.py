@@ -229,6 +229,7 @@ async def test_prepare_workflow_from_script_creates_chain_nodes() -> None:
     assert result["counts"] == {"character_views": 1, "storyboards": 1, "keyframes": 1, "videos": 1}
     assert len(result["effect"]["created_item_ids"]) == 4
     assert len(result["effect"]["created_connection_ids"]) == 6
+    assert "手动触发" in result["message"]
     keyframe_item = next(item for item in result["items"] if item["title"] == "分镜 01-01 关键帧")
     assert keyframe_item["content_json"]["resolvedMentions"][0]["nodeId"] == "char-1"
 

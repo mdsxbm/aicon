@@ -143,6 +143,75 @@ describe('CanvasEditor assistant wiring', () => {
     wrapper.unmount()
   })
 
+  it('shows the pan and marquee gesture hint in the workbench chrome', async () => {
+    useCanvasEditor.mockReturnValue({
+      loading: ref(false),
+      saving: ref(false),
+      document: ref({ id: 'doc-1', title: 'Canvas Doc' }),
+      items: ref([]),
+      connections: ref([]),
+      selectedItemIds: ref([]),
+      selectedItemId: ref(null),
+      selectedItem: ref(null),
+      zoom: ref(1),
+      pan: ref({ x: 0, y: 0 }),
+      dirty: ref(false),
+      loadDocument: vi.fn(),
+      save: vi.fn(),
+      createItem: vi.fn(),
+      updateItem: vi.fn(),
+      removeItem: vi.fn(),
+      removeItems: vi.fn(),
+      setSelection: vi.fn(),
+      setSelections: vi.fn(),
+      clearSelection: vi.fn(),
+      startConnection: vi.fn(),
+      completeConnection: vi.fn(),
+      removeConnection: vi.fn(),
+      updateViewport: vi.fn()
+    })
+
+    useCanvasGeneration.mockReturnValue({
+      generationLoadingByItem: {},
+      generationHistories: {},
+      historyLoadingByItem: {},
+      loadHistory: vi.fn(),
+      generate: vi.fn(),
+      applyGeneration: vi.fn()
+    })
+
+    const wrapper = mount(CanvasEditor, {
+      global: {
+        directives: {
+          loading: {
+            mounted() {},
+            updated() {}
+          }
+        },
+        stubs: {
+          CanvasConnectionActions: true,
+          CanvasGenerationHistoryDrawer: true,
+          CanvasImageStudio: true,
+          CanvasLinkCreateMenu: true,
+          CanvasLinkDragOverlay: true,
+          CanvasWorkbenchLayout: {
+            name: 'CanvasWorkbenchLayout',
+            props: ['zoomHintText'],
+            template: '<div class="workbench-stub" :data-zoom-hint-text="zoomHintText"><slot /></div>'
+          },
+          CanvasTextStudio: true,
+          CanvasVideoStudio: true,
+          KonvaCanvasStage: true
+        }
+      }
+    })
+
+    expect(wrapper.get('.workbench-stub').attributes('data-zoom-hint-text')).toContain(
+      '按住 Shift 左键拖拽框选节点'
+    )
+    wrapper.unmount()
+  })
+
   it('saves dirty editor state before assistant-triggered reload', async () => {
     const save = vi.fn(async () => ({}))
     const loadDocument = vi.fn(async () => {})
@@ -508,6 +577,101 @@ describe('CanvasEditor assistant wiring', () => {
     expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
     expect(ElMessageBox.confirm.mock.calls[0][0]).toContain('该节点')
     expect(removeItems).toHaveBeenCalledWith(['item-1'])
+    wrapper.unmount()
+  })
+
+  it('creates image nodes with default api key and model from the loaded catalog', async () => {
+    const createItem = vi.fn(async () => ({
+      id: 'item-image-1',
+      item_type: 'image'
+    }))
+
+    useCanvasEditor.mockReturnValue({
+      loading: ref(false),
+      saving: ref(false),
+      document: ref({ id: 'doc-1', title: 'Canvas Doc' }),
+      items: ref([]),
+      connections: ref([]),
+      selectedItemIds: ref([]),
+      selectedItemId: ref(null),
+      selectedItem: ref(null),
+      zoom: ref(1),
+      pan: ref({ x: 0, y: 0 }),
+      dirty: ref(false),
+      loadDocument: vi.fn(),
+      save: vi.fn(),
+      createItem,
+      updateItem: vi.fn(),
+      removeItem: vi.fn(),
+      removeItems: vi.fn(),
+      setSelection: vi.fn(),
+      setSelections: vi.fn(),
+      clearSelection: vi.fn(),
+      startConnection: vi.fn(),
+      completeConnection: vi.fn(),
+      removeConnection: vi.fn(),
+      updateViewport: vi.fn()
+    })
+
+    const { apiKeysService } = await import('@/services/apiKeys')
+    const { canvasService } = await import('@/services/canvas')
+    apiKeysService.getAPIKeys.mockResolvedValue({
+      api_keys: [{ id: 'key-1', name: '主 Key', provider: 'siliconflow' }]
+    })
+    canvasService.getModelCatalog.mockResolvedValue({
+      text: [],
+      image: ['image-model-1', 'image-model-2'],
+      video: ['video-model-1']
+    })
+
+    useCanvasGeneration.mockReturnValue({
+      generationLoadingByItem: {},
+      generationHistories: {},
+      historyLoadingByItem: {},
+      loadHistory: vi.fn(),
+      generate: vi.fn(),
+      applyGeneration: vi.fn()
+    })
+
+    const wrapper = mount(CanvasEditor, {
+      global: {
+        directives: {
+          loading: {
+            mounted() {},
+            updated() {}
+          }
+        },
+        stubs: {
+          CanvasConnectionActions: true,
+          CanvasGenerationHistoryDrawer: true,
+          CanvasImageStudio: true,
+          CanvasLinkCreateMenu: true,
+          CanvasLinkDragOverlay: true,
+          CanvasWorkbenchLayout: {
+            name: 'CanvasWorkbenchLayout',
+            emits: ['create-item'],
+            template:
+              '<div class="workbench-stub"><button class="create-image-node" @click="$emit(\'create-item\', \'image\')"></button><slot /></div>'
+          },
+          CanvasTextStudio: true,
+          CanvasVideoStudio: true,
+          KonvaCanvasStage: true
+        }
+      }
+    })
+
+    await nextTick()
+    await Promise.resolve()
+    await wrapper.get('.create-image-node').trigger('click')
+    await Promise.resolve()
+
+    expect(createItem).toHaveBeenCalledWith('image', {
+      generation_config: {
+        api_key_id: 'key-1',
+        model: 'image-model-1'
+      }
+    })
+
     wrapper.unmount()
   })
 })

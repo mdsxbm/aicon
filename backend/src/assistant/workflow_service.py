@@ -586,10 +586,10 @@ class CanvasAssistantWorkflowService:
         await self.canvas_service.commit()
         return {
             "ok": True,
-            "summary": "已基于已确认剧本准备角色三视图、分镜、关键帧和视频占位节点。",
+            "summary": "已基于已确认剧本创建角色三视图、分镜、关键帧和视频占位节点；后续生成请由用户在画布中手动触发。",
             "effect": _tool_effect(
                 mutated=True,
-                summary="已基于已确认剧本准备角色三视图、分镜、关键帧和视频占位节点。",
+                summary="已基于已确认剧本创建角色三视图、分镜、关键帧和视频占位节点；后续生成请由用户在画布中手动触发。",
                 created_item_ids=[str(item.id) for item in created_items],
                 created_connection_ids=[str(connection.id) for connection in created_connections],
             ),
@@ -600,7 +600,7 @@ class CanvasAssistantWorkflowService:
                 "keyframes": story_index,
                 "videos": story_index,
             },
-            "message": "已基于已确认剧本准备角色三视图、分镜、关键帧和视频占位节点。",
+            "message": "已基于已确认剧本创建角色三视图、分镜、关键帧和视频占位节点；后续生成请由用户在画布中手动触发。",
         }
 
     async def generate_character_views(self, *, document_id: str, user_id: str, api_key_id: str, chat_model_id: str, item_ids: list[str] | None = None, model: str = "") -> dict[str, Any]:

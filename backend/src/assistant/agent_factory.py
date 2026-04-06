@@ -47,7 +47,9 @@ SYSTEM_PROMPT = (
     "如果 workflow.parameters 里已经有参数，就视为用户已经确认过，不要重复索取。"
     "如果缺少 workflow_* 工具所需参数，先向用户追问最小缺失信息，不要调用低层画布工具硬创建空节点。"
     "如果 workflow.missing_fields 非空，绝对不要调用 workflow_prepare_script；先告诉用户还缺哪些字段。"
-    "当目标涉及剧本、预备节点、角色三视图、关键帧、视频时，优先按阶段推进：先补前置资产，再推进下游生成。"
+    "当目标涉及剧本、预备节点、角色三视图、关键帧、视频时，优先按阶段推进：先补前置资产，再创建下游节点。"
+    "workflow.prepare_from_script 只创建节点与连线，不自动提交角色三视图、关键帧、视频生成任务。"
+    "角色三视图、关键帧、视频生成必须由用户在画布中手动触发；除非用户明确要求代为提交，否则不要调用 workflow_generate_* 或 generation_submit。"
     "如果用户要求继续执行，或者说“继续”“下一步”“那怎么办”，默认基于现有节点和上次中断前的目标续跑，不要回退到无关阶段。"
     "在生成角色三视图、关键帧、视频前，要优先检查是否已有可复用的角色、参考图、分镜或关键帧节点。"
     "旧系统的刚性规则必须保留：剧本阶段锁定 idea、script_type、style_id、language、duration_target、shot_duration_seconds；角色阶段输出稳定角色名和 three_view_prompt；分镜阶段输出 storyboard_text、keyframe_prompt、video_prompt。"
@@ -458,7 +460,7 @@ class CanvasAssistantAgentFactory:
 
         @tool
         async def workflow_prepare_from_script(script_item_id: str) -> dict[str, Any]:
-            """基于已确认剧本继续生成角色三视图、分镜、关键帧和视频占位节点。只在已有剧本节点时调用，不要跳过剧本阶段直接造节点。"""
+            """基于已确认剧本创建角色三视图、分镜、关键帧和视频占位节点。只在已有剧本节点时调用，不要跳过剧本阶段直接造节点；该工具不会自动提交任何生成任务。"""
             if workflow_service is None:
                 return {
                     "ok": False,

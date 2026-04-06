@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from src.assistant.agent_factory import CanvasAssistantAgentFactory, CanvasAssistantToolCallingChatModel
+from src.assistant.agent_factory import CanvasAssistantAgentFactory, CanvasAssistantToolCallingChatModel, SYSTEM_PROMPT
 from src.services.api_key import APIKeyService
 from src.services.provider.factory import ProviderFactory
 
@@ -258,3 +258,8 @@ async def test_workflow_prepare_script_tool_uses_workflow_service_instead_of_can
     execution_tools.create_item.assert_not_called()
     assert result["ok"] is False
     assert result["effect"]["needs_refresh"] is False
+
+
+def test_system_prompt_requires_manual_generation_after_workflow_prepare() -> None:
+    assert "只创建节点" in SYSTEM_PROMPT
+    assert "手动触发" in SYSTEM_PROMPT

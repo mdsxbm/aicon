@@ -95,7 +95,7 @@
   )
   const composerPlaceholder = computed(
     () =>
-      '先给我一句创意、一个剧本想法，或者告诉我要从哪一步开始'
+      '先给我一句创意、一个剧本想法，或者告诉我要从哪一步开始；我会先帮你创建节点'
   )
 
   const handleSend = (message) => sendMessage(message)
