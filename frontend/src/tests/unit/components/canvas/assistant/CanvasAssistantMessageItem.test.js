@@ -83,4 +83,18 @@ describe('CanvasAssistantMessageItem', () => {
     expect(wrapper.text()).not.toContain('（空消息）')
     expect(wrapper.find('.assistant-message__wave').exists()).toBe(true)
   })
+
+  it('renders a compact typing indicator style for a live assistant placeholder', () => {
+    const wrapper = mount(CanvasAssistantMessageItem, {
+      props: {
+        message: { id: 'assistant-live-placeholder', role: 'assistant', content: '' },
+        streaming: true,
+        live: true
+      }
+    })
+
+    expect(wrapper.classes()).toContain('assistant-message--live-placeholder')
+    expect(wrapper.find('.assistant-message__meta').exists()).toBe(false)
+    expect(wrapper.find('.assistant-message__wave').exists()).toBe(true)
+  })
 })

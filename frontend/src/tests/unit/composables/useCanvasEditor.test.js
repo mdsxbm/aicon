@@ -14,6 +14,7 @@ vi.mock('@/services/canvas', () => ({
     updateItem: vi.fn(),
     createItem: vi.fn(),
     deleteItem: vi.fn(),
+    deleteItems: vi.fn(),
     createConnection: vi.fn(),
     deleteConnection: vi.fn()
   }
@@ -87,6 +88,98 @@ describe('useCanvasEditor item merging', () => {
     expect(composable.items.value[0].last_output).toEqual({
       result_video_object_key: 'uploads/final.mp4'
     })
+
+    app.unmount()
+  })
+
+  it('batch deletes selected items with a single request and removes linked connections locally', async () => {
+    canvasService.getLite.mockResolvedValue({
+      document: { id: 'doc-1', title: 'Canvas' },
+      items: [
+        {
+          id: 'item-1',
+          item_type: 'text',
+          title: '文本节点 1',
+          position_x: 10,
+          position_y: 20,
+          width: 320,
+          height: 220,
+          z_index: 1,
+          content: {},
+          generation_config: {},
+          last_output: {}
+        },
+        {
+          id: 'item-2',
+          item_type: 'image',
+          title: '图片节点 1',
+          position_x: 360,
+          position_y: 20,
+          width: 340,
+          height: 280,
+          z_index: 2,
+          content: {},
+          generation_config: {},
+          last_output: {}
+        },
+        {
+          id: 'item-3',
+          item_type: 'video',
+          title: '视频节点 1',
+          position_x: 720,
+          position_y: 20,
+          width: 360,
+          height: 300,
+          z_index: 3,
+          content: {},
+          generation_config: {},
+          last_output: {}
+        }
+      ],
+      connections: [
+        {
+          id: 'conn-1',
+          source_item_id: 'item-1',
+          target_item_id: 'item-2',
+          source_handle: 'right',
+          target_handle: 'left'
+        },
+        {
+          id: 'conn-2',
+          source_item_id: 'item-2',
+          target_item_id: 'item-3',
+          source_handle: 'right',
+          target_handle: 'left'
+        }
+      ]
+    })
+    canvasService.getItem.mockResolvedValue({
+      id: 'item-1',
+      item_type: 'text',
+      title: '文本节点 1',
+      position_x: 10,
+      position_y: 20,
+      width: 320,
+      height: 220,
+      z_index: 1,
+      content: {},
+      generation_config: {},
+      last_output: {}
+    })
+
+    const { app, composable } = mountComposable()
+    await composable.loadDocument('doc-1')
+    await nextTick()
+
+    composable.setSelections(['item-1', 'item-2'])
+    await composable.removeItems(['item-1', 'item-2'])
+
+    expect(canvasService.deleteItems).toHaveBeenCalledTimes(1)
+    expect(canvasService.deleteItems).toHaveBeenCalledWith('doc-1', ['item-1', 'item-2'])
+    expect(composable.items.value.map((item) => item.id)).toEqual(['item-3'])
+    expect(composable.connections.value).toEqual([])
+    expect(composable.selectedItemIds.value).toEqual([])
+    expect(composable.selectedItem.value).toBeNull()
 
     app.unmount()
   })

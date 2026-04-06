@@ -97,6 +97,10 @@ class CanvasPreviewItemsRequest(BaseModel):
     item_ids: List[UUID] = Field(default_factory=list)
 
 
+class CanvasBatchDeleteItemsRequest(BaseModel):
+    item_ids: List[UUID] = Field(default_factory=list, min_length=1)
+
+
 class CanvasStageDocumentResponse(BaseModel):
     id: UUID
     title: str

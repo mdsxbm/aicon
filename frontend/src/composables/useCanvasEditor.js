@@ -56,7 +56,7 @@ export function useCanvasEditor() {
   const document = ref(null)
   const items = ref([])
   const connections = ref([])
-  const selectedItemId = ref(null)
+  const selectedItemIds = ref([])
   const dirty = ref(false)
   const zoom = ref(1)
   const pan = ref({ x: 0, y: 0 })
@@ -66,8 +66,12 @@ export function useCanvasEditor() {
   const persistTimers = new Map()
   const detailLoading = new Set()
 
-  const selectedItem = computed(
-    () => items.value.find((item) => item.id === selectedItemId.value) || null
+  const selectedItemId = computed(() =>
+    selectedItemIds.value.length === 1 ? selectedItemIds.value[0] : null
+  )
+
+  const selectedItem = computed(() =>
+    items.value.find((item) => item.id === selectedItemId.value) || null
   )
 
   const maxZIndex = computed(() =>
@@ -205,7 +209,7 @@ export function useCanvasEditor() {
         normalizeItem({ ...item, has_detail: false })
       )
       connections.value = (snapshot.connections || []).map(normalizeConnection)
-      selectedItemId.value = items.value[0]?.id || null
+      selectedItemIds.value = items.value[0]?.id ? [items.value[0].id] : []
       dirty.value = false
       if (selectedItemId.value) {
         await hydrateItemDetail(selectedItemId.value)
@@ -263,7 +267,7 @@ export function useCanvasEditor() {
       await canvasService.createItem(currentDocumentId, payload)
     )
     items.value = [...items.value, { ...created, has_detail: true }]
-    selectedItemId.value = created.id
+    selectedItemIds.value = [created.id]
     return created
   }
 
@@ -276,33 +280,53 @@ export function useCanvasEditor() {
   }
 
   const removeItem = async (itemId) => {
+    await removeItems([itemId])
+  }
+
+  const removeItems = async (itemIds = []) => {
     if (!currentDocumentId) return
-    clearPersistTimer(itemId)
-    await canvasService.deleteItem(currentDocumentId, itemId)
-    items.value = items.value.filter((item) => item.id !== itemId)
+    const normalizedIds = [...new Set((itemIds || []).filter(Boolean))]
+    if (!normalizedIds.length) {
+      return
+    }
+    normalizedIds.forEach((itemId) => clearPersistTimer(itemId))
+    await canvasService.deleteItems(currentDocumentId, normalizedIds)
+    const removedIdSet = new Set(normalizedIds)
+    items.value = items.value.filter((item) => !removedIdSet.has(item.id))
     connections.value = connections.value.filter(
       (connection) =>
-        connection.source_item_id !== itemId &&
-        connection.target_item_id !== itemId
+        !removedIdSet.has(connection.source_item_id) &&
+        !removedIdSet.has(connection.target_item_id)
     )
-    if (selectedItemId.value === itemId) {
-      selectedItemId.value = items.value[0]?.id || null
-      if (selectedItemId.value) {
-        void hydrateItemDetail(selectedItemId.value)
-      }
+    selectedItemIds.value = selectedItemIds.value.filter(
+      (itemId) => !removedIdSet.has(itemId)
+    )
+    if (selectedItemId.value) {
+      void hydrateItemDetail(selectedItemId.value)
     }
-    if (pendingConnection.value?.itemId === itemId) {
+    if (
+      pendingConnection.value?.itemId &&
+      removedIdSet.has(pendingConnection.value.itemId)
+    ) {
       pendingConnection.value = null
     }
   }
 
   const setSelection = (itemId) => {
-    selectedItemId.value = itemId
+    selectedItemIds.value = itemId ? [itemId] : []
     void hydrateItemDetail(itemId)
   }
 
+  const setSelections = (itemIds = []) => {
+    const normalizedIds = [...new Set((itemIds || []).filter(Boolean))]
+    selectedItemIds.value = normalizedIds
+    if (normalizedIds.length === 1) {
+      void hydrateItemDetail(normalizedIds[0])
+    }
+  }
+
   const clearSelection = () => {
-    selectedItemId.value = null
+    selectedItemIds.value = []
   }
 
   const startConnection = (itemId, handle = 'output') => {
@@ -365,6 +389,7 @@ export function useCanvasEditor() {
     document,
     items,
     connections,
+    selectedItemIds,
     selectedItemId,
     selectedItem,
     dirty,
@@ -376,7 +401,9 @@ export function useCanvasEditor() {
     createItem,
     updateItem,
     removeItem,
+    removeItems,
     setSelection,
+    setSelections,
     clearSelection,
     startConnection,
     completeConnection,

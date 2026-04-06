@@ -221,4 +221,59 @@ describe('CanvasAssistant', () => {
     expect(wrapper.find('.assistant-composer__send').text()).toContain('处理中')
     expect(wrapper.find('.assistant-header').classes()).not.toContain('assistant-header--streaming')
   })
+
+  it('keeps the live breathing indicator under the latest message instead of attaching it to an older assistant bubble', () => {
+    useCanvasAssistant.mockReturnValue({
+      sessionId: ref('session-stream'),
+      status: ref('streaming'),
+      error: ref(''),
+      eventLog: ref([]),
+      messages: ref([]),
+      pendingInterrupt: ref(null),
+      apiKeyOptions: ref([{ id: 'key-1', label: '主 Key', provider: 'openai' }]),
+      chatModelOptions: ref(['gpt-4o-mini']),
+      selectedApiKeyId: ref('key-1'),
+      selectedChatModelId: ref('gpt-4o-mini'),
+      apiKeysLoading: ref(false),
+      chatModelsLoading: ref(false),
+      isStreaming: ref(false),
+      canSend: ref(false),
+      sendMessage: vi.fn(),
+      updateSelectedApiKeyId: vi.fn(),
+      updateSelectedChatModelId: vi.fn(),
+      resumeInterrupt: vi.fn(),
+      updatePendingInterruptModelId: vi.fn(),
+      reset: vi.fn()
+    })
+
+    useCanvasAssistantTimeline.mockReturnValue({
+      timelineItems: computed(() => [
+        {
+          id: 'assistant-1',
+          type: 'assistant_message',
+          message: { id: 'assistant-1', role: 'assistant', content: '脚本已生成并放置在画布上。', order: 1 }
+        },
+        {
+          id: 'user-2',
+          type: 'user_message',
+          message: { id: 'user-2', role: 'user', content: 'workflow_prepare_script', order: 2 }
+        }
+      ])
+    })
+
+    const wrapper = mount(CanvasAssistant, {
+      props: {
+        documentId: 'doc-1'
+      }
+    })
+
+    const messages = wrapper.findAll('.assistant-message')
+    expect(messages.length).toBe(3)
+    expect(messages[0].classes()).toContain('assistant-message--assistant')
+    expect(messages[0].find('.assistant-message__wave').exists()).toBe(false)
+    expect(messages[1].classes()).toContain('assistant-message--user')
+    expect(messages[1].find('.assistant-message__wave').exists()).toBe(false)
+    expect(messages[2].classes()).toContain('assistant-message--assistant')
+    expect(messages[2].find('.assistant-message__wave').exists()).toBe(true)
+  })
 })

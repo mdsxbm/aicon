@@ -220,6 +220,41 @@ class CanvasService(BaseService):
         await self.db_session.delete(item)
         await self.flush()
 
+    async def delete_items(self, document_id: str, item_ids: List[str], user_id: str) -> None:
+        document = await self.get_document(document_id, user_id)
+        normalized_item_ids = [ensure_canvas_uuid(item_id) for item_id in item_ids if str(item_id).strip()]
+        if not normalized_item_ids:
+            return
+
+        item_stmt = select(CanvasItem.id).where(
+            CanvasItem.document_id == document.id,
+            CanvasItem.id.in_(normalized_item_ids),
+        )
+        existing_item_ids = list((await self.execute(item_stmt)).scalars().all())
+        existing_item_id_set = {str(item_id) for item_id in existing_item_ids}
+        missing_item_ids = [item_id for item_id in normalized_item_ids if str(item_id) not in existing_item_id_set]
+        if missing_item_ids:
+            raise NotFoundError(
+                "画布节点不存在",
+                resource_id=str(missing_item_ids[0]),
+                resource_type="canvas_item",
+            )
+
+        await self.execute(
+            delete(CanvasConnection).where(
+                CanvasConnection.document_id == document.id,
+                (CanvasConnection.source_item_id.in_(normalized_item_ids))
+                | (CanvasConnection.target_item_id.in_(normalized_item_ids))
+            )
+        )
+        await self.execute(
+            delete(CanvasItem).where(
+                CanvasItem.document_id == document.id,
+                CanvasItem.id.in_(normalized_item_ids),
+            )
+        )
+        await self.flush()
+
     async def create_connection(self, document_id: str, user_id: str, payload: Dict[str, Any]) -> CanvasConnection:
         document = await self.get_document(document_id, user_id)
         source_item = await self.get_item(str(payload["source_item_id"]), user_id)

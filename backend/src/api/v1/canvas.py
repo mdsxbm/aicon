@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.dependencies import get_current_user_required
 from src.api.schemas.canvas import (
     CanvasApplyGenerationResponse,
+    CanvasBatchDeleteItemsRequest,
     CanvasDocumentCreate,
     CanvasDocumentListResponse,
     CanvasDocumentResponse,
@@ -334,6 +335,23 @@ async def delete_canvas_item(
     service = CanvasService(db)
     await service.delete_item(document_id, item_id, str(current_user.id))
     await db.commit()
+
+
+@router.post("/canvas-documents/{document_id}/items/batch-delete", status_code=status.HTTP_204_NO_CONTENT)
+async def batch_delete_canvas_items(
+    document_id: str,
+    payload: CanvasBatchDeleteItemsRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: AsyncSession = Depends(get_db),
+):
+    service = CanvasService(db)
+    await service.delete_items(
+        document_id,
+        [str(item_id) for item_id in payload.item_ids],
+        str(current_user.id),
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/canvas-documents/{document_id}/items/previews", response_model=CanvasPreviewItemsResponse)

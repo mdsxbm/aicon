@@ -4,7 +4,10 @@
       <div v-if="!items.length" class="assistant-timeline__empty">
         <div class="assistant-timeline__empty-title">从一句话开始</div>
         <div class="assistant-timeline__empty-hint">
-          直接说目标，Agent 会自己观察画布、推理下一步并执行动作。
+          先给我一句创意、一个剧本想法，或者告诉我要从哪一步开始。我会按视频工作流一步一步带你往下走。
+        </div>
+        <div class="assistant-timeline__empty-example">
+          比如：做一个像《沙丘》一样的史诗感荒漠预告片，画面是低饱和赭石与废土沙色调，强调 70MM IMAX 胶片感和长焦压缩空间。
         </div>
       </div>
 
@@ -63,8 +66,8 @@
     if (!props.busy) {
       return list
     }
-    const hasAssistantMessage = list.some((item) => item?.type === 'assistant_message')
-    if (hasAssistantMessage) {
+    const lastConversationItem = list[list.length - 1] || null
+    if (lastConversationItem?.type === 'assistant_message') {
       return list
     }
     return [
@@ -145,6 +148,16 @@
     color: #5f6b85;
     font-size: 13px;
     line-height: 1.55;
+  }
+
+  .assistant-timeline__empty-example {
+    margin-top: 4px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: rgba(75, 120, 255, 0.06);
+    color: #42526b;
+    font-size: 12px;
+    line-height: 1.65;
   }
 
   .assistant-timeline__list {

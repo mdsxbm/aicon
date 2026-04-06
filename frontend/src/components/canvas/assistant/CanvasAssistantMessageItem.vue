@@ -1,6 +1,13 @@
 <template>
-  <article class="assistant-message" :class="[`assistant-message--${messageRole}`, `assistant-message--${tone}`]">
-    <div class="assistant-message__meta">
+  <article
+    class="assistant-message"
+    :class="[
+      `assistant-message--${messageRole}`,
+      `assistant-message--${tone}`,
+      { 'assistant-message--live-placeholder': isLivePlaceholder }
+    ]"
+  >
+    <div v-if="!isLivePlaceholder" class="assistant-message__meta">
       <span class="assistant-message__role">{{ roleLabel }}</span>
       <span v-if="message.order !== undefined" class="assistant-message__order">#{{ message.order }}</span>
     </div>
@@ -56,6 +63,12 @@
   let typingFrameId = null
   let finalizeTimerId = null
 
+  const isLivePlaceholder = computed(
+    () =>
+      props.live &&
+      messageRole.value === 'assistant' &&
+      String(props.message?.id || '').trim() === 'assistant-live-placeholder'
+  )
   const showCursor = computed(() => messageRole.value === 'assistant' && (props.streaming || animating.value))
   const showWave = computed(() => messageRole.value === 'assistant' && props.live)
   const contentFallback = computed(() =>
@@ -157,6 +170,16 @@
     background: rgba(255, 255, 255, 0.96);
   }
 
+  .assistant-message--live-placeholder {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    min-width: 0;
+    padding: 10px 14px;
+    border-radius: 16px;
+    box-shadow: 0 8px 18px rgba(34, 57, 98, 0.05);
+  }
+
   .assistant-message--user {
     align-self: flex-end;
     background: linear-gradient(180deg, #4b78ff, #355ce0);
@@ -193,6 +216,13 @@
     color: inherit;
     user-select: text;
     -webkit-user-select: text;
+  }
+
+  .assistant-message--live-placeholder .assistant-message__content {
+    display: inline-flex;
+    align-items: center;
+    min-height: 16px;
+    line-height: 1;
   }
 
   .assistant-message__cursor {

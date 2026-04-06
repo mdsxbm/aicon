@@ -93,7 +93,10 @@
       Boolean(pendingInterrupt.value) ||
       Boolean(error.value)
   )
-  const composerPlaceholder = computed(() => '描述你想让画布帮你完成的事情')
+  const composerPlaceholder = computed(
+    () =>
+      '先给我一句创意、一个剧本想法，或者告诉我要从哪一步开始'
+  )
 
   const handleSend = (message) => sendMessage(message)
   const handleUpdateSelectedApiKeyId = (apiKeyId) => updateSelectedApiKeyId(apiKeyId)

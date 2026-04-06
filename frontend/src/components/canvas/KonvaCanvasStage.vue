@@ -457,7 +457,7 @@ const handlePointerDown = (event) => {
     return
   }
 
-  if (target === stage && nativeEvent?.shiftKey) {
+  if (target === stage && (nativeEvent?.button ?? 0) === 0) {
     nativeEvent?.preventDefault?.()
     const pointer = stage.getPointerPosition()
     if (!pointer) {

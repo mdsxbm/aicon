@@ -1243,6 +1243,100 @@ class TestCanvasDocumentApi:
         assert snapshot_response.json()["connections"] == []
 
     @pytest.mark.asyncio
+    async def test_batch_delete_items_removes_nodes_and_related_connections_in_one_request(self, client, auth_headers):
+        create_response = await client.post(
+            "/api/v1/canvas-documents",
+            headers=auth_headers,
+            json={"title": "Batch Delete Canvas"},
+        )
+        assert create_response.status_code == 201
+        canvas_id = create_response.json()["id"]
+
+        item_ids = [
+            "a1111111-1111-1111-1111-111111111111",
+            "b2222222-2222-2222-2222-222222222222",
+            "c3333333-3333-3333-3333-333333333333",
+        ]
+        save_graph_response = await client.put(
+            f"/api/v1/canvas-documents/{canvas_id}/graph",
+            headers=auth_headers,
+            json={
+                "items": [
+                    {
+                        "id": item_ids[0],
+                        "item_type": "text",
+                        "title": "文本节点 1",
+                        "position_x": 0,
+                        "position_y": 0,
+                        "width": 320,
+                        "height": 220,
+                        "z_index": 1,
+                        "content": {"text": "A"},
+                        "generation_config": {},
+                    },
+                    {
+                        "id": item_ids[1],
+                        "item_type": "image",
+                        "title": "图片节点 1",
+                        "position_x": 360,
+                        "position_y": 0,
+                        "width": 340,
+                        "height": 280,
+                        "z_index": 2,
+                        "content": {"prompt": "B"},
+                        "generation_config": {},
+                    },
+                    {
+                        "id": item_ids[2],
+                        "item_type": "video",
+                        "title": "视频节点 1",
+                        "position_x": 760,
+                        "position_y": 0,
+                        "width": 360,
+                        "height": 300,
+                        "z_index": 3,
+                        "content": {"prompt": "C"},
+                        "generation_config": {},
+                    },
+                ],
+                "connections": [
+                    {
+                        "id": "d4444444-4444-4444-4444-444444444444",
+                        "source_item_id": item_ids[0],
+                        "target_item_id": item_ids[1],
+                        "source_handle": "right",
+                        "target_handle": "left",
+                    },
+                    {
+                        "id": "e5555555-5555-5555-5555-555555555555",
+                        "source_item_id": item_ids[1],
+                        "target_item_id": item_ids[2],
+                        "source_handle": "right",
+                        "target_handle": "left",
+                    },
+                ],
+            },
+        )
+        assert save_graph_response.status_code == 200
+
+        delete_response = await client.post(
+            f"/api/v1/canvas-documents/{canvas_id}/items/batch-delete",
+            headers=auth_headers,
+            json={"item_ids": item_ids[:2]},
+        )
+        assert delete_response.status_code == 204
+
+        snapshot_response = await client.get(
+            f"/api/v1/canvas-documents/{canvas_id}",
+            headers=auth_headers,
+            params={"mode": "lite"},
+        )
+        assert snapshot_response.status_code == 200
+        snapshot = snapshot_response.json()
+        assert [item["id"] for item in snapshot["items"]] == [item_ids[2]]
+        assert snapshot["connections"] == []
+
+    @pytest.mark.asyncio
     async def test_get_canvas_video_task_status(self, client, auth_headers):
         create_response = await client.post(
             "/api/v1/canvas-documents",

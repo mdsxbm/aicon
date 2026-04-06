@@ -154,7 +154,7 @@
     watch
   } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
-  import { ElMessage } from 'element-plus'
+  import { ElMessage, ElMessageBox } from 'element-plus'
   import CanvasConnectionActions from '@/components/canvas/CanvasConnectionActions.vue'
   import CanvasGenerationHistoryDrawer from '@/components/canvas/CanvasGenerationHistoryDrawer.vue'
 import CanvasImageStudio from '@/components/canvas/CanvasImageStudio.vue'
@@ -208,6 +208,7 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
     document,
     items,
     connections,
+    selectedItemIds,
     selectedItemId,
     selectedItem,
     zoom,
@@ -217,8 +218,9 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
     save,
     createItem,
     updateItem,
-    removeItem,
+    removeItems,
     setSelection,
+    setSelections,
     clearSelection,
     startConnection,
     completeConnection,
@@ -258,9 +260,6 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
     { type: 'video', label: '视频节点', description: '创建视频节点并自动连接' }
   ]
 
-  const selectedItemIds = computed(() =>
-    selectedItem.value ? [selectedItem.value.id] : []
-  )
   const assistantDocumentId = computed(() =>
     String(document.value?.id || route.params.canvasId || '').trim()
   )
@@ -282,12 +281,17 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
     if (dirty.value) {
       await save()
     }
-    const preservedSelectionId = selectedItem.value?.id || ''
+    const preservedSelectionIds = [...(selectedItemIds.value || [])]
     const preservedConnectionId = selectedConnectionId.value
     syncSelectedStudioDraft()
     await loadDocument(targetDocumentId)
-    if (preservedSelectionId && items.value.some((item) => item.id === preservedSelectionId)) {
-      setSelection(preservedSelectionId)
+    const nextSelectionIds = preservedSelectionIds.filter((selectionId) =>
+      items.value.some((item) => item.id === selectionId)
+    )
+    if (nextSelectionIds.length > 1) {
+      setSelections(nextSelectionIds)
+    } else if (nextSelectionIds.length === 1) {
+      setSelection(nextSelectionIds[0])
     } else {
       clearSelection()
     }
@@ -1060,6 +1064,92 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
     clearSelection()
   }
 
+  const shouldIgnoreDeleteShortcut = (event) => {
+    if (!event) return true
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return true
+    }
+    const target = event.target
+    if (!target) {
+      return false
+    }
+    const tagName = String(target.tagName || '').toLowerCase()
+    return (
+      target.isContentEditable ||
+      ['input', 'textarea', 'select', 'button'].includes(tagName)
+    )
+  }
+
+  const pruneRemovedItemArtifacts = (itemIds = []) => {
+    const removedIdSet = new Set(itemIds)
+    const nextPreviewMap = { ...styleReferencePreviewMap.value }
+    const nextImagePreviewMap = { ...imageUploadPreviewMap.value }
+    removedIdSet.forEach((itemId) => {
+      delete nextPreviewMap[itemId]
+      delete nextImagePreviewMap[itemId]
+    })
+    styleReferencePreviewMap.value = nextPreviewMap
+    imageUploadPreviewMap.value = nextImagePreviewMap
+    if (historyTargetItemId.value && removedIdSet.has(historyTargetItemId.value)) {
+      historyDrawerVisible.value = false
+      historyTargetItemId.value = ''
+      historySelectingId.value = ''
+    }
+  }
+
+  const confirmDeleteItems = async (itemIds = []) => {
+    const count = itemIds.length
+    if (!count) {
+      return false
+    }
+    const message =
+      count === 1
+        ? '确认删除该节点吗？'
+        : `确认删除已选中的 ${count} 个节点吗？`
+    await ElMessageBox.confirm(message, '删除确认', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+    return true
+  }
+
+  const requestDeleteItems = async (itemIds = []) => {
+    const normalizedIds = [...new Set((itemIds || []).filter(Boolean))]
+    if (!normalizedIds.length) {
+      return
+    }
+    try {
+      await confirmDeleteItems(normalizedIds)
+      syncSelectedStudioDraft()
+      await removeItems(normalizedIds)
+      pruneRemovedItemArtifacts(normalizedIds)
+      selectedConnectionId.value = null
+      closeLinkMenu()
+    } catch (error) {
+      if (error === 'cancel' || error === 'close' || error?.message === 'cancel') {
+        return
+      }
+      ElMessage.error(
+        error?.response?.data?.detail || error?.message || '删除节点失败'
+      )
+    }
+  }
+
+  const handleKeydown = (event) => {
+    if (!['Delete', 'Backspace'].includes(String(event?.key || ''))) {
+      return
+    }
+    if (shouldIgnoreDeleteShortcut(event)) {
+      return
+    }
+    if (!selectedItemIds.value.length) {
+      return
+    }
+    event.preventDefault()
+    void requestDeleteItems(selectedItemIds.value)
+  }
+
   const handleFocusItem = async (itemId) => {
     await setSelectionWithDraftSync(itemId)
   }
@@ -1087,15 +1177,19 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
   }
 
   const handleSelectionBoxEnd = ({ bounds, appendToSelection }) => {
-    const hitItem = items.value.find(
+    const hitItems = items.value.filter(
       (item) =>
         item.position_x < bounds.right &&
         item.position_x + item.width > bounds.left &&
         item.position_y < bounds.bottom &&
         item.position_y + item.height > bounds.top
     )
-    if (hitItem) {
-      void setSelectionWithDraftSync(hitItem.id)
+    if (hitItems.length > 1) {
+      syncSelectedStudioDraft()
+      setSelections(hitItems.map((item) => item.id))
+      selectedConnectionId.value = null
+    } else if (hitItems.length === 1) {
+      void setSelectionWithDraftSync(hitItems[0].id)
       selectedConnectionId.value = null
     } else if (!appendToSelection) {
       void clearSelectionWithDraftSync()
@@ -1304,28 +1398,8 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
   }
 
   const removeSelectedItem = async () => {
-    if (!selectedItem.value) return
-    try {
-      syncSelectedStudioDraft()
-      const nextPreviewMap = { ...styleReferencePreviewMap.value }
-      delete nextPreviewMap[selectedItem.value.id]
-      styleReferencePreviewMap.value = nextPreviewMap
-      const nextImagePreviewMap = { ...imageUploadPreviewMap.value }
-      delete nextImagePreviewMap[selectedItem.value.id]
-      imageUploadPreviewMap.value = nextImagePreviewMap
-      if (historyTargetItemId.value === selectedItem.value.id) {
-        historyDrawerVisible.value = false
-        historyTargetItemId.value = ''
-        historySelectingId.value = ''
-      }
-      await removeItem(selectedItem.value.id)
-      selectedConnectionId.value = null
-      closeLinkMenu()
-    } catch (error) {
-      ElMessage.error(
-        error?.response?.data?.detail || error?.message || '删除节点失败'
-      )
-    }
+    if (!selectedItemIds.value.length) return
+    await requestDeleteItems(selectedItemIds.value)
   }
 
   const handleBeforeUnload = (event) => {
@@ -1372,11 +1446,13 @@ import CanvasTextStudio from '@/components/canvas/CanvasTextStudio.vue'
   onMounted(() => {
     void hydrateCanvasConfigCatalog()
     window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('keydown', handleKeydown)
   })
 
   onBeforeUnmount(() => {
     syncSelectedStudioDraft()
     window.removeEventListener('beforeunload', handleBeforeUnload)
+    window.removeEventListener('keydown', handleKeydown)
     window.removeEventListener('mousemove', handleGlobalPointerMove)
     window.removeEventListener('mouseup', handleGlobalPointerUp)
   })

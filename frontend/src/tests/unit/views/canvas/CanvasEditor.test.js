@@ -5,6 +5,7 @@
 import { nextTick, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { ElMessageBox } from 'element-plus'
 import CanvasEditor from '@/views/canvas/CanvasEditor.vue'
 import { useCanvasEditor } from '@/composables/useCanvasEditor'
 import { useCanvasGeneration } from '@/composables/useCanvasGeneration'
@@ -76,6 +77,7 @@ describe('CanvasEditor assistant wiring', () => {
       document: ref({ id: 'doc-1', title: 'Canvas Doc' }),
       items: ref([selectedItem.value]),
       connections: ref([]),
+      selectedItemIds: ref(['item-1']),
       selectedItemId: ref('item-1'),
       selectedItem,
       zoom: ref(1),
@@ -86,7 +88,9 @@ describe('CanvasEditor assistant wiring', () => {
       createItem: vi.fn(),
       updateItem: vi.fn(),
       removeItem: vi.fn(),
+      removeItems: vi.fn(),
       setSelection: vi.fn(),
+      setSelections: vi.fn(),
       clearSelection: vi.fn(),
       startConnection: vi.fn(),
       completeConnection: vi.fn(),
@@ -136,6 +140,7 @@ describe('CanvasEditor assistant wiring', () => {
     await nextTick()
 
     expect(assistant.props('documentId')).toBe('doc-1')
+    wrapper.unmount()
   })
 
   it('saves dirty editor state before assistant-triggered reload', async () => {
@@ -167,6 +172,7 @@ describe('CanvasEditor assistant wiring', () => {
       document: ref({ id: 'doc-1', title: 'Canvas Doc' }),
       items: ref([selectedItem.value]),
       connections: ref([]),
+      selectedItemIds: ref(['item-1']),
       selectedItemId: ref('item-1'),
       selectedItem,
       zoom: ref(1),
@@ -177,7 +183,9 @@ describe('CanvasEditor assistant wiring', () => {
       createItem: vi.fn(),
       updateItem: vi.fn(),
       removeItem: vi.fn(),
+      removeItems: vi.fn(),
       setSelection,
+      setSelections: vi.fn(),
       clearSelection,
       startConnection: vi.fn(),
       completeConnection: vi.fn(),
@@ -226,5 +234,280 @@ describe('CanvasEditor assistant wiring', () => {
     expect(loadDocument).toHaveBeenCalledWith('doc-1')
     expect(setSelection).toHaveBeenCalledWith('item-1')
     expect(clearSelection).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('selects every node hit by the marquee box', async () => {
+    const setSelections = vi.fn()
+    useCanvasEditor.mockReturnValue({
+      loading: ref(false),
+      saving: ref(false),
+      document: ref({ id: 'doc-1', title: 'Canvas Doc' }),
+      items: ref([
+        {
+          id: 'item-1',
+          item_type: 'text',
+          title: '文本节点 1',
+          position_x: 20,
+          position_y: 30,
+          width: 100,
+          height: 80,
+          z_index: 1,
+          content: { text: '', promptTokens: [] },
+          generation_config: {},
+          last_output: {}
+        },
+        {
+          id: 'item-2',
+          item_type: 'image',
+          title: '图片节点 1',
+          position_x: 180,
+          position_y: 60,
+          width: 120,
+          height: 90,
+          z_index: 2,
+          content: { promptTokens: [] },
+          generation_config: {},
+          last_output: {}
+        }
+      ]),
+      connections: ref([]),
+      selectedItemIds: ref([]),
+      selectedItemId: ref(null),
+      selectedItem: ref(null),
+      zoom: ref(1),
+      pan: ref({ x: 0, y: 0 }),
+      dirty: ref(false),
+      loadDocument: vi.fn(),
+      save: vi.fn(),
+      createItem: vi.fn(),
+      updateItem: vi.fn(),
+      removeItem: vi.fn(),
+      removeItems: vi.fn(),
+      setSelection: vi.fn(),
+      setSelections,
+      clearSelection: vi.fn(),
+      startConnection: vi.fn(),
+      completeConnection: vi.fn(),
+      removeConnection: vi.fn(),
+      updateViewport: vi.fn()
+    })
+
+    useCanvasGeneration.mockReturnValue({
+      generationLoadingByItem: {},
+      generationHistories: {},
+      historyLoadingByItem: {},
+      loadHistory: vi.fn(),
+      generate: vi.fn(),
+      applyGeneration: vi.fn()
+    })
+
+    const wrapper = mount(CanvasEditor, {
+      global: {
+        directives: {
+          loading: {
+            mounted() {},
+            updated() {}
+          }
+        },
+        stubs: {
+          CanvasConnectionActions: true,
+          CanvasGenerationHistoryDrawer: true,
+          CanvasImageStudio: true,
+          CanvasLinkCreateMenu: true,
+          CanvasLinkDragOverlay: true,
+          CanvasWorkbenchLayout: {
+            name: 'CanvasWorkbenchLayout',
+            template: '<div class="workbench-stub"><slot /></div>'
+          },
+          CanvasTextStudio: true,
+          CanvasVideoStudio: true,
+          KonvaCanvasStage: {
+            name: 'KonvaCanvasStage',
+            emits: ['selection-box-end'],
+            template:
+              '<button class="stage-selection-box" @click="$emit(\'selection-box-end\', { bounds: { left: 0, top: 0, right: 320, bottom: 180 }, appendToSelection: false })"></button>'
+          }
+        }
+      }
+    })
+
+    await wrapper.get('.stage-selection-box').trigger('click')
+
+    expect(setSelections).toHaveBeenCalledWith(['item-1', 'item-2'])
+    wrapper.unmount()
+  })
+
+  it('confirms before deleting all selected nodes with one batch request', async () => {
+    const removeItems = vi.fn(async () => {})
+    ElMessageBox.confirm.mockResolvedValue('confirm')
+
+    useCanvasEditor.mockReturnValue({
+      loading: ref(false),
+      saving: ref(false),
+      document: ref({ id: 'doc-1', title: 'Canvas Doc' }),
+      items: ref([
+        { id: 'item-1', item_type: 'text', title: '文本节点 1', position_x: 0, position_y: 0, width: 100, height: 80, z_index: 1, content: {}, generation_config: {}, last_output: {} },
+        { id: 'item-2', item_type: 'image', title: '图片节点 1', position_x: 120, position_y: 0, width: 100, height: 80, z_index: 2, content: {}, generation_config: {}, last_output: {} }
+      ]),
+      connections: ref([]),
+      selectedItemIds: ref(['item-1', 'item-2']),
+      selectedItemId: ref(null),
+      selectedItem: ref(null),
+      zoom: ref(1),
+      pan: ref({ x: 0, y: 0 }),
+      dirty: ref(false),
+      loadDocument: vi.fn(),
+      save: vi.fn(),
+      createItem: vi.fn(),
+      updateItem: vi.fn(),
+      removeItem: vi.fn(),
+      removeItems,
+      setSelection: vi.fn(),
+      setSelections: vi.fn(),
+      clearSelection: vi.fn(),
+      startConnection: vi.fn(),
+      completeConnection: vi.fn(),
+      removeConnection: vi.fn(),
+      updateViewport: vi.fn()
+    })
+
+    useCanvasGeneration.mockReturnValue({
+      generationLoadingByItem: {},
+      generationHistories: {},
+      historyLoadingByItem: {},
+      loadHistory: vi.fn(),
+      generate: vi.fn(),
+      applyGeneration: vi.fn()
+    })
+
+    const wrapper = mount(CanvasEditor, {
+      global: {
+        directives: {
+          loading: {
+            mounted() {},
+            updated() {}
+          }
+        },
+        stubs: {
+          CanvasConnectionActions: true,
+          CanvasGenerationHistoryDrawer: true,
+          CanvasImageStudio: true,
+          CanvasLinkCreateMenu: true,
+          CanvasLinkDragOverlay: true,
+          CanvasWorkbenchLayout: {
+            name: 'CanvasWorkbenchLayout',
+            template: '<div class="workbench-stub"><slot /></div>'
+          },
+          CanvasTextStudio: true,
+          CanvasVideoStudio: true,
+          KonvaCanvasStage: true
+        }
+      }
+    })
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
+    expect(ElMessageBox.confirm.mock.calls[0][0]).toContain('2')
+    expect(removeItems).toHaveBeenCalledWith(['item-1', 'item-2'])
+    wrapper.unmount()
+  })
+
+  it('confirms before deleting a single node from the studio panel', async () => {
+    const removeItems = vi.fn(async () => {})
+    ElMessageBox.confirm.mockResolvedValue('confirm')
+    const selectedItem = ref({
+      id: 'item-1',
+      item_type: 'text',
+      title: '文本节点 1',
+      position_x: 20,
+      position_y: 30,
+      width: 320,
+      height: 220,
+      z_index: 1,
+      content: { text: 'hello', promptTokens: [] },
+      generation_config: {},
+      last_run_status: 'idle',
+      last_run_error: null,
+      last_output: {},
+      has_detail: true,
+      is_persisted: true
+    })
+
+    useCanvasEditor.mockReturnValue({
+      loading: ref(false),
+      saving: ref(false),
+      document: ref({ id: 'doc-1', title: 'Canvas Doc' }),
+      items: ref([selectedItem.value]),
+      connections: ref([]),
+      selectedItemIds: ref(['item-1']),
+      selectedItemId: ref('item-1'),
+      selectedItem,
+      zoom: ref(1),
+      pan: ref({ x: 0, y: 0 }),
+      dirty: ref(false),
+      loadDocument: vi.fn(),
+      save: vi.fn(),
+      createItem: vi.fn(),
+      updateItem: vi.fn(),
+      removeItem: vi.fn(),
+      removeItems,
+      setSelection: vi.fn(),
+      setSelections: vi.fn(),
+      clearSelection: vi.fn(),
+      startConnection: vi.fn(),
+      completeConnection: vi.fn(),
+      removeConnection: vi.fn(),
+      updateViewport: vi.fn()
+    })
+
+    useCanvasGeneration.mockReturnValue({
+      generationLoadingByItem: {},
+      generationHistories: {},
+      historyLoadingByItem: {},
+      loadHistory: vi.fn(),
+      generate: vi.fn(),
+      applyGeneration: vi.fn()
+    })
+
+    const wrapper = mount(CanvasEditor, {
+      global: {
+        directives: {
+          loading: {
+            mounted() {},
+            updated() {}
+          }
+        },
+        stubs: {
+          CanvasConnectionActions: true,
+          CanvasGenerationHistoryDrawer: true,
+          CanvasImageStudio: true,
+          CanvasLinkCreateMenu: true,
+          CanvasLinkDragOverlay: true,
+          CanvasWorkbenchLayout: {
+            name: 'CanvasWorkbenchLayout',
+            template: '<div class="workbench-stub"><slot /></div>'
+          },
+          CanvasTextStudio: {
+            name: 'CanvasTextStudio',
+            emits: ['delete'],
+            template: '<button class="single-delete" @click="$emit(\'delete\')"></button>'
+          },
+          CanvasVideoStudio: true,
+          KonvaCanvasStage: true
+        }
+      }
+    })
+
+    await wrapper.get('.single-delete').trigger('click')
+    await Promise.resolve()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
+    expect(ElMessageBox.confirm.mock.calls[0][0]).toContain('该节点')
+    expect(removeItems).toHaveBeenCalledWith(['item-1'])
+    wrapper.unmount()
   })
 })

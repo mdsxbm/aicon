@@ -84,6 +84,12 @@ export const canvasService = {
     return del(`/canvas-documents/${documentId}/items/${itemId}`)
   },
 
+  deleteItems(documentId, itemIds = []) {
+    return post(`/canvas-documents/${documentId}/items/batch-delete`, {
+      item_ids: itemIds
+    })
+  },
+
   getItemPreviews(documentId, itemIds = []) {
     return post(`/canvas-documents/${documentId}/items/previews`, { item_ids: itemIds })
   },
